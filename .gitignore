@@ -17,3 +17,6 @@ static/
 
 # Local postgres cluster (if someone puts it in-repo)
 pgdata/
+
+# Frontend build tooling
+frontend/node_modules/
