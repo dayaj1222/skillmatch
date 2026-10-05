@@ -79,6 +79,43 @@ def test_invite_creates_exactly_one_feed_entry(client, register):
     assert "APPLIED" not in kinds, f"invite should not masquerade as an application: {kinds}"
 
 
+def test_invitee_can_accept_their_own_invite(client, register):
+    """An invited user can accept, and acceptance puts them on the team."""
+    register("lead")
+    pid = client.post("/api/projects", json=PROJECT).json()["id"]
+    bob = _client_for("bob")
+
+    client.post(f"/api/projects/{pid}/invite", json={"username": "bob", "message": "join"})
+
+    # Bob sees the invite on the project, marked as owner-initiated.
+    detail = bob.get(f"/api/projects/{pid}").json()
+    assert detail["my_application"]["initiated_by"] == "OWNER"
+    app_id = detail["my_application"]["application_id"]
+
+    r = bob.post(
+        f"/api/projects/{pid}/applications/{app_id}/decide", json={"status": "ACCEPTED"}
+    )
+    assert r.status_code == 200, r.text
+
+    # Bob is now a member.
+    after = bob.get(f"/api/projects/{pid}").json()
+    assert after["my_membership"] is not None
+
+
+def test_applicant_cannot_self_accept_a_normal_application(client, register):
+    """Someone who applied on their own cannot accept themselves onto the team."""
+    register("lead")
+    pid = client.post("/api/projects", json=PROJECT).json()["id"]
+    bob = _client_for("bob")
+    bob.post(f"/api/projects/{pid}/apply", json={"message": "pick me"})
+
+    app_id = bob.get(f"/api/projects/{pid}").json()["my_application"]["application_id"]
+    r = bob.post(
+        f"/api/projects/{pid}/applications/{app_id}/decide", json={"status": "ACCEPTED"}
+    )
+    assert r.status_code == 403, r.text
+
+
 def test_comment_thread_is_one_level_deep(client, register):
     register("lead")
     pid = client.post("/api/projects", json=PROJECT).json()["id"]

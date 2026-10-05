@@ -136,24 +136,20 @@ export function ProjectDetailPage() {
         <ApplyForm projectId={projectId} onApplied={load} />
       )}
 
-      {project.my_application && !isMember && (
+      {project.my_application && !isMember && project.my_application.status === "PENDING" && (
+        <Invitation
+          projectId={projectId}
+          application={project.my_application}
+          onChanged={load}
+        />
+      )}
+
+      {project.my_application && !isMember && project.my_application.status !== "PENDING" && (
         <div className="border-3 border-rule p-5">
           <p className="text-[0.875rem]">
-            Your application is{" "}
-            <strong className="uppercase">{project.my_application.status}</strong>.
+            Your {project.my_application.initiated_by === "OWNER" ? "invitation" : "application"}{" "}
+            is <strong className="uppercase">{project.my_application.status}</strong>.
           </p>
-          {project.my_application.status === "PENDING" && (
-            <button
-              type="button"
-              onClick={async () => {
-                await api.withdraw(projectId);
-                await load();
-              }}
-              className="btn btn-ghost mt-3 h-8 px-2"
-            >
-              Withdraw
-            </button>
-          )}
         </div>
       )}
 
@@ -305,6 +301,88 @@ export function ProjectDetailPage() {
           </ul>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * A pending row on the project, from the recipient's point of view.
+ * An owner-initiated row is an invitation to accept; an applicant-initiated
+ * row is their own application, which only the owner can decide.
+ */
+function Invitation({
+  projectId,
+  application,
+  onChanged,
+}: {
+  projectId: number;
+  application: Applicant;
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState<"ACCEPTED" | "REJECTED" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const invited = application.initiated_by === "OWNER";
+
+  const decide = async (status: "ACCEPTED" | "REJECTED") => {
+    setBusy(status);
+    setError(null);
+    try {
+      await api.decide(projectId, application.application_id, status);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not respond");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="border-3 border-rule p-5">
+      {error && <ErrorNote message={error} />}
+      <p className="text-[0.875rem]">
+        {invited ? (
+          <>
+            You were <strong className="uppercase">invited</strong> to this project.
+          </>
+        ) : (
+          <>
+            Your application is <strong className="uppercase">pending</strong>.
+          </>
+        )}
+      </p>
+
+      {invited ? (
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            onClick={() => decide("ACCEPTED")}
+            disabled={busy !== null}
+            className="btn btn-primary h-8"
+          >
+            <Check size={14} weight="bold" />
+            {busy === "ACCEPTED" ? "Joining" : "Accept invite"}
+          </button>
+          <button
+            type="button"
+            onClick={() => decide("REJECTED")}
+            disabled={busy !== null}
+            className="btn btn-secondary h-8"
+          >
+            {busy === "REJECTED" ? "Declining" : "Decline"}
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={async () => {
+            await api.withdraw(projectId);
+            await onChanged();
+          }}
+          className="btn btn-ghost mt-3 h-8 px-2"
+        >
+          Withdraw
+        </button>
+      )}
     </div>
   );
 }

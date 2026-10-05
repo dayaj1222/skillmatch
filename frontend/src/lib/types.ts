@@ -77,6 +77,8 @@ export interface Applicant {
   username: string;
   message: string;
   status: ApplicationStatus;
+  // "APPLICANT" when they applied, "OWNER" when the owner invited them.
+  initiated_by: "APPLICANT" | "OWNER";
   created_at: string;
 }
 

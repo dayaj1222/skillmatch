@@ -223,6 +223,7 @@ def project_detail(
                 username=u.username,
                 message=a.message,
                 status=a.status,
+                initiated_by=a.initiated_by,
                 created_at=a.created_at,
             )
             for a, u in rows
@@ -243,6 +244,7 @@ def project_detail(
                 username=user.username,
                 message=app_row.message,
                 status=app_row.status,
+                initiated_by=app_row.initiated_by,
                 created_at=app_row.created_at,
             )
         mem_row = db.get(Membership, (project_id, user.id))
@@ -383,12 +385,22 @@ def decide_application(
     project = db.get(Project, project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="No such project")
-    if project.owner_id != user.id:
-        raise HTTPException(status_code=403, detail="Only the owner can decide")
 
     application = db.get(Application, application_id)
     if application is None or application.project_id != project_id:
         raise HTTPException(status_code=404, detail="No such application")
+
+    is_owner = project.owner_id == user.id
+    # The invitee may answer their own invite, but only accept or decline it;
+    # they cannot decide other people, and they cannot act on a normal
+    # application they submitted themselves (that is the owner's call).
+    is_invitee = (
+        application.applicant_id == user.id and application.initiated_by == "OWNER"
+    )
+    if not is_owner and not is_invitee:
+        raise HTTPException(status_code=403, detail="Only the owner can decide")
+    if is_invitee and not is_owner and payload.status not in ("ACCEPTED", "REJECTED"):
+        raise HTTPException(status_code=400, detail="You can only accept or decline")
     if application.status != "PENDING":
         raise HTTPException(status_code=400, detail=f"Already {application.status.lower()}")
 
@@ -414,6 +426,7 @@ def decide_application(
         username=applicant.username if applicant else "?",
         message=application.message,
         status=application.status,
+        initiated_by=application.initiated_by,
         created_at=application.created_at,
     )
 

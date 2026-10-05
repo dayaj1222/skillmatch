@@ -144,6 +144,9 @@ class ApplicantOut(BaseModel):
     username: str
     message: str
     status: str
+    # "APPLICANT" when they applied, "OWNER" when the owner invited them. Lets
+    # the invitee's own view say "you were invited" rather than "you applied".
+    initiated_by: str = "APPLICANT"
     created_at: dt.datetime
 
 
