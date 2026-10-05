@@ -1,25 +1,25 @@
-// Shared UI primitives: states, chips, and small layout helpers.
+// Shared UI primitives.
 //
-// These exist so loading / empty / error states are consistent everywhere
-// rather than re-invented per page (taste-skill Section 4.5).
+// Every value here comes from a Tailwind utility tied to @theme in index.css.
+// No hex codes, no font names, no radii are written in this file.
 
 import type { ReactNode } from "react";
 
 import type { ProjectStatus } from "../lib/types";
 
-/** A shimmering block shaped like the content that will replace it. */
+/** A ruled placeholder shaped like the content that will replace it. */
 export function Skeleton({ className = "" }: { className?: string }) {
-  return <div className={`animate-pulse rounded bg-[var(--color-sunken)] ${className}`} />;
+  return <div className={`animate-pulse bg-rule/15 ${className}`} />;
 }
 
-export function SkeletonList({ rows = 4 }: { rows?: number }) {
+/** Skeleton rows matching the ruled register layout. */
+export function SkeletonRows({ rows = 3 }: { rows?: number }) {
   return (
-    <div className="space-y-3">
+    <div className="border-t-3 border-rule">
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="panel p-5">
-          <Skeleton className="h-4 w-1/3" />
+        <div key={i} className="border-b-3 border-rule px-4 py-6">
+          <Skeleton className="h-5 w-1/3" />
           <Skeleton className="mt-3 h-3 w-2/3" />
-          <Skeleton className="mt-2 h-3 w-1/2" />
         </div>
       ))}
     </div>
@@ -27,8 +27,8 @@ export function SkeletonList({ rows = 4 }: { rows?: number }) {
 }
 
 /**
- * Composed empty state: says what is missing and, where possible, what to do.
- * Not a lone grey sentence.
+ * Empty state: says what is missing and offers the action that fixes it.
+ * Ruled and bordered so it reads as part of the register, not a floating card.
  */
 export function Empty({
   title,
@@ -40,56 +40,56 @@ export function Empty({
   action?: ReactNode;
 }) {
   return (
-    <div className="panel flex flex-col items-start gap-3 px-6 py-10">
-      <div className="space-y-1">
-        <p className="text-[0.9375rem] font-medium text-[var(--color-ink)]">{title}</p>
-        <p className="max-w-[52ch] text-sm text-[var(--color-ink-muted)]">{body}</p>
-      </div>
-      {action}
+    <div className="border-3 border-rule p-6">
+      <p className="display text-base">{title}</p>
+      <p className="mt-2 max-w-[58ch] text-sm text-muted">{body}</p>
+      {action && <div className="mt-5">{action}</div>}
     </div>
   );
 }
 
-/** Inline error for forms and failed reads. Never a bare toast for these. */
+/** Inline error. Ruled, not a toast: this belongs next to the thing that failed. */
 export function ErrorNote({ message }: { message: string }) {
   return (
     <p
       role="alert"
-      className="rounded-[var(--radius-control)] border border-[var(--color-deny)]/25 bg-[var(--color-deny-wash)] px-3 py-2 text-sm text-[var(--color-deny)]"
+      className="border-3 border-deny bg-deny/5 px-3 py-2 text-sm font-medium text-deny"
     >
       {message}
     </p>
   );
 }
 
-const STATUS_STYLES: Record<ProjectStatus, { bg: string; fg: string; label: string }> = {
-  OPEN: { bg: "var(--color-accent-wash)", fg: "var(--color-accent)", label: "Open" },
-  FORMING: { bg: "var(--color-warn-wash)", fg: "var(--color-warn)", label: "Forming" },
-  ACTIVE: { bg: "var(--color-affirm-wash)", fg: "var(--color-affirm)", label: "Active" },
-  CLOSED: { bg: "var(--color-sunken)", fg: "var(--color-ink-muted)", label: "Closed" },
+const STATUS_COLOR: Record<ProjectStatus, string> = {
+  OPEN: "text-open",
+  FORMING: "text-forming",
+  ACTIVE: "text-active",
+  CLOSED: "text-closed",
 };
 
-/** Status chip. Colour here conveys real lifecycle state, nothing decorative. */
+const STATUS_LABEL: Record<ProjectStatus, string> = {
+  OPEN: "Open",
+  FORMING: "Forming",
+  ACTIVE: "Active",
+  CLOSED: "Closed",
+};
+
+/** Status chip. Colour here encodes real lifecycle state, nothing else. */
 export function StatusChip({ status }: { status: ProjectStatus }) {
-  const s = STATUS_STYLES[status];
-  return (
-    <span className="chip" style={{ background: s.bg, color: s.fg }}>
-      {s.label}
-    </span>
-  );
+  return <span className={`chip ${STATUS_COLOR[status]}`}>{STATUS_LABEL[status]}</span>;
 }
 
-/** Level 1-5 rendered as five ticks. Cheaper to scan than "Level 4". */
+/**
+ * Level 1-5 as five ticks. Cheaper to scan down a column than the word "Level 4",
+ * and it aligns under tabular figures.
+ */
 export function LevelTicks({ level }: { level: number }) {
   return (
     <span className="inline-flex items-center gap-[3px]" title={`Level ${level} of 5`}>
       {[1, 2, 3, 4, 5].map((n) => (
         <span
           key={n}
-          className="h-[7px] w-[3px] rounded-full"
-          style={{
-            background: n <= level ? "var(--color-accent)" : "var(--color-line-strong)",
-          }}
+          className={`h-3 w-[3px] ${n <= level ? "bg-current" : "bg-current opacity-25"}`}
         />
       ))}
       <span className="sr-only">Level {level} of 5</span>
@@ -97,40 +97,29 @@ export function LevelTicks({ level }: { level: number }) {
   );
 }
 
-/** Section heading. Plain sentence case, no numbered eyebrow. */
-export function SectionTitle({
-  title,
-  hint,
-  action,
-}: {
-  title: string;
-  hint?: string;
-  action?: ReactNode;
-}) {
+/**
+ * Section heading: a black band with an uppercase display label.
+ * This is a label for a real block of content, not an eyebrow decoration.
+ */
+export function SectionHead({ title, meta }: { title: string; meta?: ReactNode }) {
   return (
-    <div className="mb-4 flex items-baseline justify-between gap-4">
-      <div>
-        <h2 className="text-[0.9375rem] font-semibold tracking-[-0.01em] text-[var(--color-ink)]">
-          {title}
-        </h2>
-        {hint && <p className="mt-0.5 text-[0.8125rem] text-[var(--color-ink-muted)]">{hint}</p>}
-      </div>
-      {action}
+    <div className="section-head">
+      <span>{title}</span>
+      {meta && <span className="tnum text-[0.6875rem] tracking-normal">{meta}</span>}
     </div>
   );
 }
 
-/** Relative time that degrades to a date for anything older than a week. */
+/** Relative time, degrading to a date for anything older than a week. */
 export function TimeAgo({ iso }: { iso: string }) {
   const then = new Date(iso);
-  const now = Date.now();
-  const seconds = Math.round((now - then.getTime()) / 1000);
-  if (seconds < 60) return <span>just now</span>;
+  const seconds = Math.round((Date.now() - then.getTime()) / 1000);
+  if (seconds < 60) return <>just now</>;
   const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return <span>{minutes}m ago</span>;
+  if (minutes < 60) return <>{minutes}m ago</>;
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return <span>{hours}h ago</span>;
+  if (hours < 24) return <>{hours}h ago</>;
   const days = Math.round(hours / 24);
-  if (days < 7) return <span>{days}d ago</span>;
-  return <span>{then.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>;
+  if (days < 7) return <>{days}d ago</>;
+  return <>{then.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</>;
 }

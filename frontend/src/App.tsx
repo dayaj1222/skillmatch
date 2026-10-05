@@ -2,7 +2,7 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
 
 import { AppShell } from "./components/AppShell";
-import { SkeletonList } from "./components/ui";
+import { SkeletonRows } from "./components/ui";
 import { useAuth } from "./lib/auth";
 import { LoginPage } from "./pages/Login";
 import { RegisterPage } from "./pages/Register";
@@ -21,7 +21,7 @@ function Protected({ children }: { children: ReactNode }) {
   if (loading) {
     return (
       <div className="mx-auto max-w-[640px] pt-8">
-        <SkeletonList rows={3} />
+        <SkeletonRows rows={3} />
       </div>
     );
   }

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Plus, Trash } from "@phosphor-icons/react";
 
-import { ErrorNote, SectionTitle, SkeletonList } from "../components/ui";
+import { ErrorNote, SectionHead, SkeletonRows } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { Skill } from "../lib/types";
@@ -108,7 +108,7 @@ export function ProjectFormPage() {
   if (loading) {
     return (
       <div className="mx-auto max-w-[640px]">
-        <SkeletonList rows={3} />
+        <SkeletonRows rows={3} />
       </div>
     );
   }
@@ -120,15 +120,15 @@ export function ProjectFormPage() {
   return (
     <div className="mx-auto max-w-[640px] space-y-6">
       <div>
-        <h1 className="text-[1.5rem] font-semibold tracking-[-0.02em] text-[var(--color-ink)]">
+        <h1 className="text-[1.5rem] font-semibold tracking-[-0.02em] text-ink">
           {isEdit ? "Edit project" : "New project"}
         </h1>
-        <p className="mt-1 text-sm text-[var(--color-ink-muted)]">
+        <p className="mt-1 text-sm text-muted">
           Say what you are building, what skills it needs, and how many people you want.
         </p>
       </div>
 
-      <form onSubmit={submit} className="panel space-y-5 p-5">
+      <form onSubmit={submit} className="border-3 border-rule space-y-5 p-5">
         {error && <ErrorNote message={error} />}
 
         <div>
@@ -177,15 +177,15 @@ export function ProjectFormPage() {
           </p>
         </div>
 
-        <div className="border-t border-[var(--color-line)] pt-5">
-          <SectionTitle title="Required skills" hint="What you need, and at what level." />
+        <div className="border-t border-rule pt-5">
+          <SectionHead title="Required skills" meta="What you need, and at what level." />
 
           {skills.length > 0 && (
-            <ul className="mb-4 divide-y divide-[var(--color-line)] rounded-[var(--radius-control)] border border-[var(--color-line)]">
+            <ul className="mb-4 divide-y divide-rule border-x-3 border-b-3 border-rule">
               {skills.map((s) => (
                 <li key={s.key} className="flex items-center gap-3 px-3 py-2.5">
-                  <span className="flex-1 text-[0.9375rem] text-[var(--color-ink)]">{s.name}</span>
-                  <label className="flex items-center gap-1.5 text-[0.8125rem] text-[var(--color-ink-muted)]">
+                  <span className="flex-1 text-[0.9375rem] text-ink">{s.name}</span>
+                  <label className="flex items-center gap-1.5 text-[0.8125rem] text-muted">
                     Min level
                     <select
                       className="field-input h-7 w-[4.5rem] px-1.5 text-[0.8125rem]"
@@ -267,7 +267,7 @@ export function ProjectFormPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3 border-t border-[var(--color-line)] pt-5">
+        <div className="flex items-center gap-3 border-t border-rule pt-5">
           <button type="submit" className="btn btn-primary" disabled={busy || !title.trim()}>
             {busy ? "Saving..." : isEdit ? "Save changes" : "Create project"}
           </button>

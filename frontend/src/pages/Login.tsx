@@ -17,24 +17,24 @@ export function AuthLayout({
   footer: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-[var(--color-paper)] px-4 py-10">
+    <div className="flex min-h-[100dvh] items-center justify-center bg-[] px-4 py-10">
       <div className="w-full max-w-[380px]">
         <Link to="/" className="mb-8 flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-[6px] bg-[var(--color-accent)] text-[12px] font-bold text-white">
+          <span className="flex h-7 w-7 items-center justify-center  bg-ink text-[12px] font-bold text-white">
             SM
           </span>
-          <span className="text-base font-semibold tracking-[-0.01em] text-[var(--color-ink)]">
+          <span className="text-base font-semibold tracking-[-0.01em] text-ink">
             SkillMatch
           </span>
         </Link>
 
-        <h1 className="text-[1.375rem] font-semibold tracking-[-0.02em] text-[var(--color-ink)]">
+        <h1 className="text-[1.375rem] font-semibold tracking-[-0.02em] text-ink">
           {title}
         </h1>
-        <p className="mt-1 text-sm text-[var(--color-ink-muted)]">{subtitle}</p>
+        <p className="mt-1 text-sm text-muted">{subtitle}</p>
 
         <div className="mt-6">{children}</div>
-        <div className="mt-5 text-sm text-[var(--color-ink-muted)]">{footer}</div>
+        <div className="mt-5 text-sm text-muted">{footer}</div>
       </div>
     </div>
   );
@@ -72,7 +72,7 @@ export function LoginPage() {
       footer={
         <>
           New here?{" "}
-          <Link to="/register" className="font-medium text-[var(--color-accent)] hover:underline">
+          <Link to="/register" className="font-medium text-signal hover:underline">
             Create an account
           </Link>
         </>

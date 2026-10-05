@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowRight, Check, Crown, Door, X } from "@phosphor-icons/react";
+import { Check, X } from "@phosphor-icons/react";
 
 import {
-  Empty,
   ErrorNote,
-  SectionTitle,
-  SkeletonList,
+  SectionHead,
+  SkeletonRows,
   StatusChip,
   TimeAgo,
 } from "../components/ui";
@@ -17,9 +16,9 @@ import type { Applicant, ProjectDetail } from "../lib/types";
 /**
  * Project detail.
  *
- * The page renders differently by relationship: owner (review applicants,
- * manage the team), member (roster, post updates), outsider (apply). The
- * backend enforces these rules; this view only reflects them.
+ * Renders differently by relationship: owner (review applicants, run the team),
+ * member (roster, post updates), outsider (apply). The backend enforces all of
+ * these rules; this view only reflects them.
  */
 export function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -49,15 +48,15 @@ export function ProjectDetailPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-[760px]">
-        <SkeletonList rows={4} />
+      <div className="mx-auto max-w-[820px]">
+        <SkeletonRows rows={4} />
       </div>
     );
   }
 
   if (error || !project) {
     return (
-      <div className="mx-auto max-w-[760px]">
+      <div className="mx-auto max-w-[820px]">
         <ErrorNote message={error ?? "Project not found"} />
       </div>
     );
@@ -66,58 +65,69 @@ export function ProjectDetailPage() {
   const isOwner = user?.id === project.owner_id;
   const isMember = Boolean(project.my_membership);
   const spotsLeft = project.capacity - project.member_count;
+  const pendingCount = project.applicants?.filter((a) => a.status === "PENDING").length ?? 0;
 
   return (
-    <div className="mx-auto max-w-[760px] space-y-8">
+    <div className="mx-auto max-w-[820px] space-y-10">
       <div>
         <Link
           to="/projects"
-          className="mb-3 inline-flex items-center gap-1 text-[0.8125rem] text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
+          className="mb-3 inline-block text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted hover:text-ink"
         >
-          Projects
+          All projects
         </Link>
-        <div className="flex flex-wrap items-center gap-2.5">
-          <h1 className="text-[1.5rem] font-semibold tracking-[-0.02em] text-[var(--color-ink)]">
-            {project.title}
-          </h1>
-          <StatusChip status={project.status} />
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="display max-w-[24ch] text-[clamp(1.75rem,4vw,2.5rem)]">
+                {project.title}
+              </h1>
+              <StatusChip status={project.status} />
+            </div>
+            <p className="tnum mt-2 text-[0.75rem] uppercase tracking-[0.06em] text-muted">
+              led by{" "}
+              <Link to={`/u/${project.owner_username}`} className="underline hover:text-ink">
+                @{project.owner_username}
+              </Link>{" "}
+              / started <TimeAgo iso={project.created_at} />
+            </p>
+          </div>
+
+          <div className="shrink-0 text-right">
+            <p className="tnum display text-[2rem] leading-none">
+              {project.member_count}/{project.capacity}
+            </p>
+            <p className="tnum mt-1 text-[0.6875rem] uppercase tracking-[0.06em] text-muted">
+              {project.status === "CLOSED"
+                ? "closed"
+                : `${spotsLeft} ${spotsLeft === 1 ? "spot" : "spots"} left`}
+            </p>
+          </div>
         </div>
-        <p className="tabular mt-1 text-[0.8125rem] text-[var(--color-ink-faint)]">
-          led by{" "}
-          <Link to={`/u/${project.owner_username}`} className="hover:text-[var(--color-accent)]">
-            @{project.owner_username}
-          </Link>{" "}
-          · started <TimeAgo iso={project.created_at} /> · {project.member_count}/{project.capacity}{" "}
-          members
-          {project.status !== "CLOSED"
-            ? ` · ${spotsLeft} ${spotsLeft === 1 ? "spot" : "spots"} left`
-            : ""}
-        </p>
       </div>
 
       {project.description && (
-        <p className="max-w-[68ch] whitespace-pre-wrap text-[0.9375rem] leading-relaxed text-[var(--color-ink-muted)]">
+        <p className="max-w-[70ch] whitespace-pre-wrap text-[0.9375rem] leading-relaxed">
           {project.description}
         </p>
       )}
 
       {project.required_skills.length > 0 && (
         <div>
-          <SectionTitle title="Needs" hint="Skills and the minimum level for each." />
-          <div className="flex flex-wrap gap-2">
+          <SectionHead title="Needs" meta="minimum level shown" />
+          <ul className="border-x-3 border-b-3 border-rule">
             {project.required_skills.map((s) => (
-              <span
+              <li
                 key={s.skill_id}
-                className="chip"
-                style={{ background: "var(--color-sunken)", color: "var(--color-ink)" }}
+                className="flex items-center justify-between border-b-3 border-rule px-4 py-3 last:border-b-0"
               >
-                {s.name}
-                <span className="tabular text-[0.6875rem] text-[var(--color-ink-faint)]">
-                  L{s.min_level}+
+                <span className="text-[0.9375rem] font-medium">{s.name}</span>
+                <span className="tnum text-[0.8125rem] font-bold uppercase tracking-[0.04em]">
+                  Level {s.min_level}+
                 </span>
-              </span>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       )}
 
@@ -126,9 +136,10 @@ export function ProjectDetailPage() {
       )}
 
       {project.my_application && !isMember && (
-        <div className="panel px-5 py-4">
-          <p className="text-[0.875rem] text-[var(--color-ink)]">
-            Your application is <strong>{project.my_application.status.toLowerCase()}</strong>.
+        <div className="border-3 border-rule p-5">
+          <p className="text-[0.875rem]">
+            Your application is{" "}
+            <strong className="uppercase">{project.my_application.status}</strong>.
           </p>
           {project.my_application.status === "PENDING" && (
             <button
@@ -137,7 +148,7 @@ export function ProjectDetailPage() {
                 await api.withdraw(projectId);
                 await load();
               }}
-              className="btn btn-ghost mt-2 h-8 px-2"
+              className="btn btn-ghost mt-3 h-8 px-2"
             >
               Withdraw
             </button>
@@ -146,9 +157,9 @@ export function ProjectDetailPage() {
       )}
 
       {!user && (
-        <div className="panel px-5 py-4">
-          <p className="text-[0.875rem] text-[var(--color-ink-muted)]">
-            <Link to="/login" className="font-medium text-[var(--color-accent)] hover:underline">
+        <div className="border-3 border-rule p-5">
+          <p className="text-[0.875rem] text-muted">
+            <Link to="/login" className="font-bold underline hover:text-ink">
               Sign in
             </Link>{" "}
             to apply for this project.
@@ -158,28 +169,27 @@ export function ProjectDetailPage() {
 
       {isOwner && project.applicants && (
         <div>
-          <SectionTitle
+          <SectionHead
             title="Applicants"
-            hint={
+            meta={
               spotsLeft > 0
-                ? `You can accept ${spotsLeft} more before the team is full.`
-                : "The team is at capacity. Accepting more will be refused."
+                ? `${pendingCount} pending / ${spotsLeft} can be accepted`
+                : `${pendingCount} pending / team full`
             }
           />
           {project.applicants.length === 0 ? (
-            <Empty
-              title="No applications yet"
-              body="Nobody has asked to join. Sharing the project link or adding clearer required skills tends to help."
-            />
+            <div className="border-x-3 border-b-3 border-rule p-6">
+              <p className="display text-sm">No applications yet</p>
+              <p className="mt-2 max-w-[58ch] text-sm text-muted">
+                Nobody has asked to join. Clearer required skills tend to help.
+              </p>
+            </div>
           ) : (
-            <ul className="space-y-2.5">
+            <ul className="border-x-3 border-b-3 border-rule">
               {project.applicants.map((a) => (
-                <ApplicantRow
-                  key={a.application_id}
-                  applicant={a}
-                  projectId={projectId}
-                  onDecided={load}
-                />
+                <li key={a.application_id}>
+                  <ApplicantRow applicant={a} projectId={projectId} onDecided={load} />
+                </li>
               ))}
             </ul>
           )}
@@ -187,28 +197,25 @@ export function ProjectDetailPage() {
       )}
 
       <div>
-        <SectionTitle title="Team" hint={isMember ? "You are on this team." : undefined} />
-        <ul className="panel divide-y divide-[var(--color-line)]">
+        <SectionHead title="Team" meta={isMember ? "you are on this team" : undefined} />
+        <ul className="border-x-3 border-b-3 border-rule">
           {project.members.map((m) => (
             <li
               key={m.user_id}
-              className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3"
+              className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b-3 border-rule px-4 py-3 last:border-b-0"
             >
-              <div className="flex items-center gap-2">
-                {m.role === "LEADER" && <Crown size={14} weight="fill" color="var(--color-warn)" />}
+              <div className="flex items-center gap-2.5">
                 <Link
                   to={`/u/${m.username}`}
-                  className="text-[0.9375rem] text-[var(--color-ink)] hover:text-[var(--color-accent)]"
+                  className="text-[0.9375rem] font-medium hover:underline"
                 >
                   {m.username}
                 </Link>
-                {m.role === "LEADER" && (
-                  <span className="text-[0.75rem] text-[var(--color-ink-faint)]">leader</span>
-                )}
+                <span className="chip text-ink">{m.role === "LEADER" ? "Leader" : "Member"}</span>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="tabular text-[0.75rem] text-[var(--color-ink-faint)]">
+              <div className="flex items-center gap-3">
+                <span className="tnum text-[0.6875rem] uppercase tracking-[0.06em] text-faint">
                   joined <TimeAgo iso={m.joined_at} />
                 </span>
                 {isOwner && m.user_id !== project.owner_id && project.status !== "CLOSED" && (
@@ -218,7 +225,7 @@ export function ProjectDetailPage() {
                       await api.promote(projectId, m.username);
                       await load();
                     }}
-                    className="btn btn-ghost h-7 px-2 text-[0.8125rem]"
+                    className="btn btn-ghost h-7 px-2 text-[0.6875rem]"
                   >
                     Make leader
                   </button>
@@ -230,9 +237,8 @@ export function ProjectDetailPage() {
                       await api.leave(projectId);
                       navigate("/projects");
                     }}
-                    className="btn btn-ghost h-7 px-2 text-[0.8125rem]"
+                    className="btn btn-ghost h-7 px-2 text-[0.6875rem]"
                   >
-                    <Door size={13} weight="regular" />
                     Leave
                   </button>
                 )}
@@ -242,7 +248,7 @@ export function ProjectDetailPage() {
         </ul>
 
         {isOwner && project.status !== "CLOSED" && (
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-4 flex flex-wrap gap-2">
             <button
               type="button"
               onClick={async () => {
@@ -261,30 +267,32 @@ export function ProjectDetailPage() {
       </div>
 
       <div>
-        <SectionTitle title="Updates" hint={isMember ? undefined : "Posted by the team."} />
+        <SectionHead title="Updates" meta={isMember ? "you can post" : undefined} />
 
         {isMember && <UpdateComposer projectId={projectId} onPosted={load} />}
 
         {project.updates.length === 0 ? (
-          <p className="text-[0.875rem] text-[var(--color-ink-muted)]">
-            {isMember ? "No updates yet. Post the first one." : "No updates posted yet."}
-          </p>
+          <div className="border-x-3 border-b-3 border-rule p-6">
+            <p className="text-sm text-muted">
+              {isMember ? "No updates yet. Post the first one." : "No updates posted yet."}
+            </p>
+          </div>
         ) : (
-          <ul className="space-y-3">
+          <ul className="border-x-3 border-b-3 border-rule">
             {project.updates.map((u) => (
-              <li key={u.id} className="panel px-5 py-4">
+              <li key={u.id} className="border-b-3 border-rule px-4 py-4 last:border-b-0">
                 <div className="flex items-baseline justify-between gap-3">
                   <Link
                     to={`/u/${u.author_username}`}
-                    className="text-[0.8125rem] font-medium text-[var(--color-ink)] hover:text-[var(--color-accent)]"
+                    className="text-[0.75rem] font-bold uppercase tracking-[0.06em] hover:underline"
                   >
                     @{u.author_username}
                   </Link>
-                  <span className="tabular text-[0.75rem] text-[var(--color-ink-faint)]">
+                  <span className="tnum text-[0.6875rem] uppercase tracking-[0.06em] text-faint">
                     <TimeAgo iso={u.created_at} />
                   </span>
                 </div>
-                <p className="mt-1.5 whitespace-pre-wrap text-[0.9375rem] leading-relaxed text-[var(--color-ink-muted)]">
+                <p className="mt-2 whitespace-pre-wrap text-[0.9375rem] leading-relaxed">
                   {u.body}
                 </p>
               </li>
@@ -316,26 +324,27 @@ function ApplyForm({ projectId, onApplied }: { projectId: number; onApplied: () 
   };
 
   return (
-    <form onSubmit={submit} className="panel space-y-3 p-5">
-      <SectionTitle title="Apply to join" hint="Say what you would bring." />
-      {error && <ErrorNote message={error} />}
-      <div>
-        <label htmlFor="apply-message" className="field-label">
-          Your note
-        </label>
-        <textarea
-          id="apply-message"
-          rows={3}
-          className="field-input"
-          placeholder="I have built two Postgres-backed services and can take the schema work."
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-        />
+    <form onSubmit={submit} className="border-3 border-rule p-5">
+      <SectionHead title="Apply to join" />
+      <div className="mt-4 space-y-4">
+        {error && <ErrorNote message={error} />}
+        <div>
+          <label htmlFor="apply-message" className="field-label">
+            Your note
+          </label>
+          <textarea
+            id="apply-message"
+            rows={3}
+            className="field-input"
+            placeholder="I have built two Postgres-backed services and can take the schema work."
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+          />
+        </div>
+        <button type="submit" className="btn btn-primary" disabled={busy}>
+          {busy ? "Sending" : "Send application"}
+        </button>
       </div>
-      <button type="submit" className="btn btn-primary" disabled={busy}>
-        {busy ? "Sending..." : "Send application"}
-        <ArrowRight size={14} weight="bold" />
-      </button>
     </form>
   );
 }
@@ -359,7 +368,6 @@ function ApplicantRow({
       await api.decide(projectId, applicant.application_id, status);
       onDecided();
     } catch (err) {
-      // The capacity trigger's message lands here verbatim.
       setError(err instanceof Error ? err.message : "Could not decide");
     } finally {
       setBusy(null);
@@ -369,44 +377,34 @@ function ApplicantRow({
   const decided = applicant.status !== "PENDING";
 
   return (
-    <li className="panel px-5 py-4">
+    <div className="border-b-3 border-rule px-4 py-4 last:border-b-0">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <Link
           to={`/u/${applicant.username}`}
-          className="text-[0.9375rem] font-medium text-[var(--color-ink)] hover:text-[var(--color-accent)]"
+          className="text-[0.9375rem] font-medium hover:underline"
         >
           {applicant.username}
         </Link>
-        <span className="tabular text-[0.75rem] text-[var(--color-ink-faint)]">
+        <span className="tnum text-[0.6875rem] uppercase tracking-[0.06em] text-faint">
           <TimeAgo iso={applicant.created_at} />
         </span>
       </div>
 
       {applicant.message && (
-        <p className="mt-1.5 whitespace-pre-wrap text-[0.875rem] leading-relaxed text-[var(--color-ink-muted)]">
+        <p className="mt-2 whitespace-pre-wrap text-[0.875rem] leading-relaxed text-muted">
           {applicant.message}
         </p>
       )}
 
       {error && (
-        <div className="mt-2">
+        <div className="mt-3">
           <ErrorNote message={error} />
         </div>
       )}
 
       {decided ? (
-        <p
-          className="mt-2 text-[0.8125rem] font-medium"
-          style={{
-            color:
-              applicant.status === "ACCEPTED"
-                ? "var(--color-affirm)"
-                : applicant.status === "REJECTED"
-                  ? "var(--color-deny)"
-                  : "var(--color-ink-faint)",
-          }}
-        >
-          {applicant.status.charAt(0) + applicant.status.slice(1).toLowerCase()}
+        <p className="mt-3 text-[0.75rem] font-bold uppercase tracking-[0.06em] text-faint">
+          {applicant.status}
         </p>
       ) : (
         <div className="mt-3 flex gap-2">
@@ -417,7 +415,7 @@ function ApplicantRow({
             className="btn btn-primary h-8"
           >
             <Check size={14} weight="bold" />
-            {busy === "ACCEPTED" ? "Accepting..." : "Accept"}
+            {busy === "ACCEPTED" ? "Accepting" : "Accept"}
           </button>
           <button
             type="button"
@@ -426,11 +424,11 @@ function ApplicantRow({
             className="btn btn-secondary h-8"
           >
             <X size={14} weight="bold" />
-            {busy === "REJECTED" ? "Rejecting..." : "Reject"}
+            {busy === "REJECTED" ? "Rejecting" : "Reject"}
           </button>
         </div>
       )}
-    </li>
+    </div>
   );
 }
 
@@ -452,7 +450,7 @@ function UpdateComposer({ projectId, onPosted }: { projectId: number; onPosted: 
   };
 
   return (
-    <form onSubmit={submit} className="panel mb-4 space-y-3 p-4">
+    <form onSubmit={submit} className="border-x-3 border-t-3 border-rule p-4">
       <label htmlFor="update-body" className="field-label">
         Post an update
       </label>
@@ -464,8 +462,8 @@ function UpdateComposer({ projectId, onPosted }: { projectId: number; onPosted: 
         value={body}
         onChange={(e) => setBody(e.target.value)}
       />
-      <button type="submit" className="btn btn-secondary" disabled={busy || !body.trim()}>
-        {busy ? "Posting..." : "Post update"}
+      <button type="submit" className="btn btn-secondary mt-3" disabled={busy || !body.trim()}>
+        {busy ? "Posting" : "Post update"}
       </button>
     </form>
   );

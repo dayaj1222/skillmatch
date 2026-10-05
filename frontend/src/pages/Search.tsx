@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { X } from "@phosphor-icons/react";
 
-import { Empty, ErrorNote, LevelTicks, SectionTitle, SkeletonList } from "../components/ui";
+import { Empty, ErrorNote, LevelTicks, SectionHead, SkeletonRows } from "../components/ui";
 import { api } from "../lib/api";
 import type { PublicProfile, Skill } from "../lib/types";
 
@@ -74,25 +74,21 @@ export function SearchPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-[1.5rem] font-semibold tracking-[-0.02em] text-[var(--color-ink)]">
+        <h1 className="text-[1.5rem] font-semibold tracking-[-0.02em] text-ink">
           Find people
         </h1>
-        <p className="mt-1 max-w-[58ch] text-sm text-[var(--color-ink-muted)]">
+        <p className="mt-1 max-w-[58ch] text-sm text-muted">
           Name the skills a project needs. Results rank by how many of them each person has at
           the level you ask for.
         </p>
       </div>
 
-      <div className="panel space-y-5 p-5">
+      <div className="border-3 border-rule space-y-5 p-5">
         <div>
           <label className="field-label">Required skills</label>
           <div className="flex flex-wrap items-center gap-1.5">
             {selected.map((name) => (
-              <span
-                key={name}
-                className="chip"
-                style={{ background: "var(--color-accent-wash)", color: "var(--color-accent)" }}
-              >
+              <span key={name} className="chip text-signal">
                 {name}
                 <button
                   type="button"
@@ -114,9 +110,9 @@ export function SearchPage() {
           </div>
 
           {pickerOpen && (
-            <div className="mt-2 max-h-52 overflow-y-auto rounded-[var(--radius-control)] border border-[var(--color-line)] bg-[var(--color-surface)] p-2">
+            <div className="mt-2 max-h-52 overflow-y-auto border-3 border-rule bg-paper p-2">
               {available.length === 0 ? (
-                <p className="px-1 py-2 text-[0.8125rem] text-[var(--color-ink-muted)]">
+                <p className="px-1 py-2 text-[0.8125rem] text-muted">
                   No more skills to add.
                 </p>
               ) : (
@@ -129,10 +125,10 @@ export function SearchPage() {
                         toggleSkill(s.name);
                         setPickerOpen(false);
                       }}
-                      className="rounded-[var(--radius-control)] border border-[var(--color-line)] px-2 py-1 text-[0.8125rem] text-[var(--color-ink)] hover:border-[var(--color-accent)] hover:bg-[var(--color-accent-wash)]"
+                      className="border-3 border-rule px-2 py-1 text-[0.8125rem] text-ink hover:bg-ink hover:text-inverse"
                     >
                       {s.name}
-                      <span className="tabular ml-1.5 text-[0.6875rem] text-[var(--color-ink-faint)]">
+                      <span className="tabular ml-1.5 text-[0.6875rem] text-faint">
                         {s.people}
                       </span>
                     </button>
@@ -143,7 +139,7 @@ export function SearchPage() {
           )}
         </div>
 
-        <div className="grid gap-4 border-t border-[var(--color-line)] pt-5 sm:grid-cols-3">
+        <div className="grid gap-4 border-t border-rule pt-5 sm:grid-cols-3">
           <div>
             <label htmlFor="min-level" className="field-label">
               Minimum level
@@ -176,12 +172,12 @@ export function SearchPage() {
           </div>
 
           <div className="flex items-end">
-            <label className="flex h-9 cursor-pointer items-center gap-2 text-[0.8125rem] text-[var(--color-ink)]">
+            <label className="flex h-9 cursor-pointer items-center gap-2 text-[0.8125rem] text-ink">
               <input
                 type="checkbox"
                 checked={requireAll}
                 onChange={(e) => setRequireAll(e.target.checked)}
-                className="h-4 w-4 accent-[var(--color-accent)]"
+                className="h-4 w-4 accent-ink"
               />
               Must have every skill
             </label>
@@ -190,26 +186,21 @@ export function SearchPage() {
       </div>
 
       <div>
-        <SectionTitle
+        <SectionHead
           title={selected.length > 0 ? "Matches" : "Everyone"}
-          hint={
+          meta={
             selected.length > 0
-              ? `${selected.length} skill${selected.length === 1 ? "" : "s"} required${
-                  requireAll ? ", all of them" : ""
+              ? `${selected.length} required${requireAll ? ", all" : ""}${
+                  results && !loading ? ` / ${results.length} matched` : ""
                 }`
-              : "Add a skill above to rank by coverage."
-          }
-          action={
-            results && !loading ? (
-              <span className="tabular text-[0.8125rem] text-[var(--color-ink-faint)]">
-                {results.length} {results.length === 1 ? "person" : "people"}
-              </span>
-            ) : null
+              : results && !loading
+                ? `${results.length} people`
+                : undefined
           }
         />
 
         {error && <ErrorNote message={error} />}
-        {loading && <SkeletonList rows={3} />}
+        {loading && <SkeletonRows rows={3} />}
 
         {!loading && !error && results && results.length === 0 && (
           <Empty
@@ -257,25 +248,24 @@ function PersonRow({
     .join(" · ");
 
   return (
-    <li className="panel px-5 py-4 transition-colors hover:border-[var(--color-line-strong)]">
+    <li className="border-3 border-rule px-5 py-4 transition-colors hover:border-rule">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <div className="flex items-baseline gap-2">
           <Link
             to={`/u/${person.username}`}
-            className="text-[0.9375rem] font-medium text-[var(--color-ink)] hover:text-[var(--color-accent)]"
+            className="text-[0.9375rem] font-medium text-ink hover:text-signal"
           >
             {person.full_name || person.username}
           </Link>
-          <span className="tabular text-[0.8125rem] text-[var(--color-ink-faint)]">
+          <span className="tabular text-[0.8125rem] text-faint">
             @{person.username}
           </span>
         </div>
         {required.length > 0 && (
           <span
-            className="tabular text-[0.8125rem] font-medium"
-            style={{
-              color: held.length === required.length ? "var(--color-affirm)" : "var(--color-warn)",
-            }}
+            className={`tnum text-[0.8125rem] font-medium ${
+              held.length === required.length ? "text-active" : "text-forming"
+            }`}
           >
             {held.length}/{required.length} skills
           </span>
@@ -283,10 +273,10 @@ function PersonRow({
       </div>
 
       {person.headline && (
-        <p className="mt-0.5 text-[0.875rem] text-[var(--color-ink-muted)]">{person.headline}</p>
+        <p className="mt-0.5 text-[0.875rem] text-muted">{person.headline}</p>
       )}
 
-      {meta && <p className="tabular mt-1 text-[0.75rem] text-[var(--color-ink-faint)]">{meta}</p>}
+      {meta && <p className="tabular mt-1 text-[0.75rem] text-faint">{meta}</p>}
 
       {person.skills.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
@@ -296,14 +286,9 @@ function PersonRow({
             return (
               <span
                 key={s.skill_id}
-                className="inline-flex items-center gap-1.5 text-[0.8125rem]"
-                style={{
-                  color: isRequired
-                    ? counts
-                      ? "var(--color-ink)"
-                      : "var(--color-ink-faint)"
-                    : "var(--color-ink-muted)",
-                }}
+                className={`inline-flex items-center gap-1.5 text-[0.8125rem] ${
+                  isRequired ? (counts ? "text-ink" : "text-faint") : "text-muted"
+                }`}
               >
                 <LevelTicks level={s.level} />
                 {s.name}
@@ -314,7 +299,7 @@ function PersonRow({
       )}
 
       {missing.length > 0 && (
-        <p className="mt-2.5 text-[0.75rem] text-[var(--color-ink-faint)]">
+        <p className="mt-2.5 text-[0.75rem] text-faint">
           Short on: {missing.join(", ")}
         </p>
       )}

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Plus, SealCheck, Trash } from "@phosphor-icons/react";
 
-import { Empty, ErrorNote, LevelTicks, SectionTitle, SkeletonList } from "../components/ui";
+import { Empty, ErrorNote, LevelTicks, SectionHead, SkeletonRows } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { Profile, ProfileSkill, PublicProfile, Skill } from "../lib/types";
@@ -48,7 +48,7 @@ export function ProfilePage() {
   if (loading) {
     return (
       <div className="mx-auto max-w-[720px]">
-        <SkeletonList rows={3} />
+        <SkeletonRows rows={3} />
       </div>
     );
   }
@@ -97,15 +97,15 @@ function ProfileHeader({
   return (
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-0">
-        <h1 className="text-[1.5rem] font-semibold tracking-[-0.02em] text-[var(--color-ink)]">
+        <h1 className="text-[1.5rem] font-semibold tracking-[-0.02em] text-ink">
           {profile.full_name || profile.username}
         </h1>
-        <p className="tabular mt-0.5 text-[0.8125rem] text-[var(--color-ink-faint)]">
+        <p className="tabular mt-0.5 text-[0.8125rem] text-faint">
           @{profile.username}
           {meta ? ` · ${meta}` : ""}
         </p>
         {profile.headline && (
-          <p className="mt-2 max-w-[60ch] text-[0.9375rem] text-[var(--color-ink-muted)]">
+          <p className="mt-2 max-w-[60ch] text-[0.9375rem] text-muted">
             {profile.headline}
           </p>
         )}
@@ -114,7 +114,7 @@ function ProfileHeader({
             href={profile.contact_link}
             target="_blank"
             rel="noreferrer noopener"
-            className="mt-2 inline-block text-[0.8125rem] font-medium text-[var(--color-accent)] hover:underline"
+            className="mt-2 inline-block text-[0.8125rem] font-medium text-signal hover:underline"
           >
             Contact
           </a>
@@ -144,17 +144,17 @@ function ReadOnlyProfile({
     <div className="space-y-8">
       {profile.bio && (
         <div>
-          <SectionTitle title="Background" />
-          <p className="max-w-[65ch] whitespace-pre-wrap text-[0.9375rem] leading-relaxed text-[var(--color-ink-muted)]">
+          <SectionHead title="Background" />
+          <p className="max-w-[65ch] whitespace-pre-wrap text-[0.9375rem] leading-relaxed text-muted">
             {profile.bio}
           </p>
         </div>
       )}
 
       <div>
-        <SectionTitle
+        <SectionHead
           title="Skills"
-          hint={
+          meta={
             isMe
               ? "Counts show how many people vouched for each skill."
               : "Vouch for a skill you have seen them use."
@@ -177,7 +177,7 @@ function ReadOnlyProfile({
             }
           />
         ) : (
-          <ul className="panel divide-y divide-[var(--color-line)]">
+          <ul className="border-x-3 border-b-3 border-rule">
             {profile.skills.map((s) => (
               <SkillRow
                 key={s.skill_id}
@@ -231,23 +231,23 @@ function SkillRow({
     <li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
       <div className="flex items-center gap-3">
         <LevelTicks level={skill.level} />
-        <span className="text-[0.9375rem] text-[var(--color-ink)]">{skill.name}</span>
+        <span className="text-[0.9375rem] text-ink">{skill.name}</span>
         {skill.category && (
-          <span className="text-[0.75rem] text-[var(--color-ink-faint)]">{skill.category}</span>
+          <span className="text-[0.75rem] text-faint">{skill.category}</span>
         )}
       </div>
 
       <div className="flex items-center gap-3">
         {skill.years > 0 && (
-          <span className="tabular text-[0.8125rem] text-[var(--color-ink-faint)]">
+          <span className="tabular text-[0.8125rem] text-faint">
             {skill.years} {skill.years === 1 ? "yr" : "yrs"}
           </span>
         )}
-        <span className="tabular flex items-center gap-1 text-[0.8125rem] text-[var(--color-ink-muted)]">
+        <span className="tabular flex items-center gap-1 text-[0.8125rem] text-muted">
           <SealCheck
             size={14}
             weight={count > 0 ? "fill" : "regular"}
-            color={count > 0 ? "var(--color-affirm)" : "var(--color-ink-faint)"}
+            className={count > 0 ? "text-active" : "text-faint"}
           />
           {count}
         </span>
@@ -303,8 +303,8 @@ function EditProfile({ profile, onSaved }: { profile: Profile; onSaved: () => vo
 
   return (
     <div className="space-y-8">
-      <form onSubmit={submit} className="panel space-y-4 p-5">
-        <SectionTitle title="Your details" hint="Shown on your public profile." />
+      <form onSubmit={submit} className="border-3 border-rule space-y-4 p-5">
+        <SectionHead title="Your details" meta="Shown on your public profile." />
         {error && <ErrorNote message={error} />}
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -400,7 +400,7 @@ function EditProfile({ profile, onSaved }: { profile: Profile; onSaved: () => vo
           <button type="submit" className="btn btn-primary" disabled={saving}>
             {saving ? "Saving..." : "Save details"}
           </button>
-          {saved && <span className="text-[0.8125rem] text-[var(--color-affirm)]">Saved.</span>}
+          {saved && <span className="text-[0.8125rem] text-active">Saved.</span>}
         </div>
       </form>
 
@@ -477,27 +477,27 @@ function SkillEditor({ onSaved }: { onSaved: () => void }) {
   );
 
   return (
-    <div className="panel p-5">
-      <SectionTitle
+    <div className="border-3 border-rule p-5">
+      <SectionHead
         title="Skills"
-        hint="Pick from the shared list so two people typing the same skill get one entry."
+        meta="Pick from the shared list so two people typing the same skill get one entry."
       />
       {error && <ErrorNote message={error} />}
 
       {current.length === 0 ? (
-        <p className="mb-4 text-[0.875rem] text-[var(--color-ink-muted)]">
+        <p className="mb-4 text-[0.875rem] text-muted">
           You have not added any skills yet. Search ranks people by these, so a profile without
           skills is invisible to search.
         </p>
       ) : (
-        <ul className="mb-4 divide-y divide-[var(--color-line)] rounded-[var(--radius-control)] border border-[var(--color-line)]">
+        <ul className="mb-4 divide-y divide-rule border-x-3 border-b-3 border-rule">
           {current.map((s) => (
             <li key={s.skill_id} className="flex flex-wrap items-center gap-3 px-3 py-2.5">
-              <span className="min-w-[8rem] flex-1 text-[0.9375rem] text-[var(--color-ink)]">
+              <span className="min-w-[8rem] flex-1 text-[0.9375rem] text-ink">
                 {s.name}
               </span>
 
-              <label className="flex items-center gap-1.5 text-[0.8125rem] text-[var(--color-ink-muted)]">
+              <label className="flex items-center gap-1.5 text-[0.8125rem] text-muted">
                 Level
                 <select
                   className="field-input h-7 w-[4.5rem] px-1.5 text-[0.8125rem]"
@@ -518,7 +518,7 @@ function SkillEditor({ onSaved }: { onSaved: () => void }) {
                 </select>
               </label>
 
-              <label className="flex items-center gap-1.5 text-[0.8125rem] text-[var(--color-ink-muted)]">
+              <label className="flex items-center gap-1.5 text-[0.8125rem] text-muted">
                 Years
                 <input
                   type="number"
@@ -614,11 +614,11 @@ function SkillEditor({ onSaved }: { onSaved: () => void }) {
         </button>
       </div>
 
-      <div className="mt-5 flex items-center gap-3 border-t border-[var(--color-line)] pt-4">
+      <div className="mt-5 flex items-center gap-3 border-t border-rule pt-4">
         <button type="button" onClick={persist} className="btn btn-primary" disabled={saving}>
           {saving ? "Saving..." : "Save skills"}
         </button>
-        <span className="text-[0.8125rem] text-[var(--color-ink-faint)]">
+        <span className="text-[0.8125rem] text-faint">
           Saving replaces your whole skill set.
         </span>
       </div>

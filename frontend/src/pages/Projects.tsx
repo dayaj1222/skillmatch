@@ -1,12 +1,18 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
-import { Empty, ErrorNote, SectionTitle, SkeletonList, StatusChip } from "../components/ui";
+import { Empty, ErrorNote, SkeletonRows, StatusChip } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { Project, Skill } from "../lib/types";
 
-/** Browse projects, filter by required skill. */
+/**
+ * Projects, as a register.
+ *
+ * Each project is a ruled row, not a floating card: the rule separates records,
+ * which is what a register does. The row inverts on hover. Capacity is the
+ * loudest number on the row because capacity is what this app is about.
+ */
 export function ProjectsPage() {
   const { user } = useAuth();
   const [params, setParams] = useSearchParams();
@@ -53,15 +59,10 @@ export function ProjectsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-[1.5rem] font-semibold tracking-[-0.02em] text-[var(--color-ink)]">
-            Projects
-          </h1>
-          <p className="mt-1 max-w-[58ch] text-sm text-[var(--color-ink-muted)]">
-            Things people want to build. Apply with a note, and the owner decides who joins.
-          </p>
-        </div>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <h1 className="display max-w-[20ch] text-[clamp(2rem,5vw,3.25rem)]">
+          Things people want to build
+        </h1>
         {user && (
           <Link to="/projects/new" className="btn btn-primary">
             New project
@@ -69,14 +70,14 @@ export function ProjectsPage() {
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-4">
+      <div className="flex flex-wrap items-end gap-6 border-y-3 border-rule py-4">
         <div className="min-w-[12rem]">
           <label htmlFor="skill-filter" className="field-label">
             Needs skill
           </label>
           <select
             id="skill-filter"
-            className="field-input"
+            className="field-input h-9"
             value={activeSkill}
             onChange={(e) => {
               const v = e.target.value;
@@ -93,62 +94,57 @@ export function ProjectsPage() {
           </select>
         </div>
 
-        <label className="flex h-9 cursor-pointer items-center gap-2 pt-5 text-[0.8125rem] text-[var(--color-ink)]">
+        <label className="flex h-9 cursor-pointer items-center gap-2 text-[0.8125rem] font-semibold uppercase tracking-[0.04em]">
           <input
             type="checkbox"
             checked={openOnly}
             onChange={(e) => setOpenOnly(e.target.checked)}
-            className="h-4 w-4 accent-[var(--color-accent)]"
+            className="h-4 w-4 accent-ink"
           />
           Recruiting only
         </label>
+
+        {projects && !loading && (
+          <span className="tnum ml-auto text-[0.8125rem] font-semibold uppercase tracking-[0.04em] text-muted">
+            {projects.length} listed
+          </span>
+        )}
       </div>
 
-      <div>
-        <SectionTitle
-          title="All projects"
+      {error && <ErrorNote message={error} />}
+      {loading && <SkeletonRows rows={4} />}
+
+      {!loading && !error && projects && projects.length === 0 && (
+        <Empty
+          title="Nothing here"
+          body={
+            activeSkill
+              ? `Nobody is recruiting for ${activeSkill} right now. Clear the filter to see everything.`
+              : "Nobody has posted a project yet. If you have an idea, post it and see who turns up."
+          }
           action={
-            projects && !loading ? (
-              <span className="tabular text-[0.8125rem] text-[var(--color-ink-faint)]">
-                {projects.length}
-              </span>
-            ) : null
+            user ? (
+              <Link to="/projects/new" className="btn btn-secondary">
+                Post a project
+              </Link>
+            ) : (
+              <Link to="/register" className="btn btn-secondary">
+                Create an account
+              </Link>
+            )
           }
         />
+      )}
 
-        {error && <ErrorNote message={error} />}
-        {loading && <SkeletonList rows={4} />}
-
-        {!loading && !error && projects && projects.length === 0 && (
-          <Empty
-            title="No projects here"
-            body={
-              activeSkill
-                ? `Nobody is recruiting for ${activeSkill} right now. Clear the filter to see everything.`
-                : "Nobody has posted a project yet. If you have an idea, post it and see who turns up."
-            }
-            action={
-              user ? (
-                <Link to="/projects/new" className="btn btn-secondary">
-                  Post a project
-                </Link>
-              ) : (
-                <Link to="/register" className="btn btn-secondary">
-                  Create an account
-                </Link>
-              )
-            }
-          />
-        )}
-
-        {!loading && projects && projects.length > 0 && (
-          <ul className="space-y-2.5">
-            {projects.map((p) => (
-              <ProjectRow key={p.id} project={p} />
-            ))}
-          </ul>
-        )}
-      </div>
+      {!loading && projects && projects.length > 0 && (
+        <ul className="border-t-3 border-rule">
+          {projects.map((p) => (
+            <li key={p.id}>
+              <ProjectRow project={p} />
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -157,51 +153,48 @@ function ProjectRow({ project }: { project: Project }) {
   const spotsLeft = project.capacity - project.member_count;
 
   return (
-    <li className="panel px-5 py-4 transition-colors hover:border-[var(--color-line-strong)]">
-      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+    <Link to={`/projects/${project.id}`} className="row px-4 py-5">
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2.5">
-            <Link
-              to={`/projects/${project.id}`}
-              className="text-[0.9375rem] font-medium text-[var(--color-ink)] hover:text-[var(--color-accent)]"
-            >
-              {project.title}
-            </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="display text-[1.0625rem]">{project.title}</span>
             <StatusChip status={project.status} />
           </div>
-          <p className="tabular mt-0.5 text-[0.75rem] text-[var(--color-ink-faint)]">
-            led by @{project.owner_username}
+          <p className="tnum row-dim mt-1 text-[0.75rem] uppercase tracking-[0.06em]">
+            led by @{project.owner_username} / started{" "}
+            {new Date(project.created_at).toLocaleDateString(undefined, {
+              month: "short",
+              day: "numeric",
+            })}
           </p>
           {project.description && (
-            <p className="mt-1.5 line-clamp-2 max-w-[65ch] text-[0.875rem] text-[var(--color-ink-muted)]">
+            <p className="row-dim mt-2 line-clamp-2 max-w-[70ch] text-[0.875rem]">
               {project.description}
             </p>
           )}
           {project.required_skills.length > 0 && (
-            <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1">
+            <p className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-[0.75rem] font-semibold uppercase tracking-[0.04em]">
               {project.required_skills.map((s) => (
-                <span key={s.skill_id} className="text-[0.8125rem] text-[var(--color-ink-muted)]">
+                <span key={s.skill_id}>
                   {s.name}
-                  <span className="tabular ml-1 text-[0.75rem] text-[var(--color-ink-faint)]">
-                    L{s.min_level}+
-                  </span>
+                  <span className="tnum row-dim ml-1 opacity-70">L{s.min_level}+</span>
                 </span>
               ))}
-            </div>
-          )}
-        </div>
-
-        <div className="tabular shrink-0 text-right text-[0.8125rem]">
-          <p className="text-[var(--color-ink)]">
-            {project.member_count}/{project.capacity} members
-          </p>
-          {project.status !== "CLOSED" && (
-            <p className="text-[var(--color-ink-faint)]">
-              {spotsLeft} {spotsLeft === 1 ? "spot" : "spots"} left
             </p>
           )}
         </div>
+
+        <div className="shrink-0 text-right">
+          <p className="tnum display text-[1.5rem] leading-none">
+            {project.member_count}/{project.capacity}
+          </p>
+          <p className="tnum row-dim mt-1 text-[0.6875rem] uppercase tracking-[0.06em]">
+            {project.status === "CLOSED"
+              ? "closed"
+              : `${spotsLeft} ${spotsLeft === 1 ? "spot" : "spots"} left`}
+          </p>
+        </div>
       </div>
-    </li>
+    </Link>
   );
 }
