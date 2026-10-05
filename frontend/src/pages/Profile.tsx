@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Plus, SealCheck, Trash } from "@phosphor-icons/react";
 
-import { Empty, ErrorNote, LevelTicks, SectionHead, SkeletonRows } from "../components/ui";
+import { Empty, ErrorNote, LevelTicks, SectionHead, SkillCombo, SkeletonRows } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { Profile, ProfileSkill, PublicProfile, Skill } from "../lib/types";
@@ -554,25 +554,14 @@ function SkillEditor({ onSaved }: { onSaved: () => void }) {
           <label htmlFor="skill-name" className="field-label">
             Add a skill
           </label>
-          <input
+          <SkillCombo
             id="skill-name"
-            className="field-input"
-            list="skill-catalog"
             placeholder="Python, Figma, Postgres"
             value={pendingName}
-            onChange={(e) => setPendingName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                add();
-              }
-            }}
+            onChange={setPendingName}
+            onCommit={add}
+            options={unused.map((s) => ({ name: s.name, people: s.people }))}
           />
-          <datalist id="skill-catalog">
-            {unused.map((s) => (
-              <option key={s.id} value={s.name} />
-            ))}
-          </datalist>
         </div>
 
         <div>

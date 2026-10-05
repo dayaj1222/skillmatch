@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Plus, Trash } from "@phosphor-icons/react";
 
-import { ErrorNote, SectionHead, SkeletonRows } from "../components/ui";
+import { ErrorNote, SectionHead, SkillCombo, SkeletonRows } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { Skill } from "../lib/types";
@@ -223,25 +223,14 @@ export function ProjectFormPage() {
               <label htmlFor="req-skill" className="field-label">
                 Skill
               </label>
-              <input
+              <SkillCombo
                 id="req-skill"
-                className="field-input"
-                list="project-skill-catalog"
                 placeholder="Postgres"
                 value={pendingName}
-                onChange={(e) => setPendingName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addSkill();
-                  }
-                }}
+                onChange={setPendingName}
+                onCommit={addSkill}
+                options={unused.map((s) => ({ name: s.name }))}
               />
-              <datalist id="project-skill-catalog">
-                {unused.map((s) => (
-                  <option key={s.id} value={s.name} />
-                ))}
-              </datalist>
             </div>
             <div>
               <label htmlFor="req-level" className="field-label">

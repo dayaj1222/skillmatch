@@ -206,6 +206,19 @@
     resize: vertical;
   }
 
+  /* Number fields: the native spinner is OS chrome (grey, rounded) and cannot
+     be themed. Remove it; the square ruled field is the control. */
+  .field-input[type="number"] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+
+  .field-input[type="number"]::-webkit-outer-spin-button,
+  .field-input[type="number"]::-webkit-inner-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+
   .field-help {
     font-size: 0.75rem;
     color: var(--color-muted);
@@ -267,6 +280,61 @@
     text-transform: uppercase;
     letter-spacing: 0.06em;
     white-space: nowrap;
+  }
+
+  /* --- Skill picker ---------------------------------------------------- */
+  /* A text field with a ruled menu beneath it. Replaces <datalist>, whose
+     popup is drawn by the OS (dark, rounded, purple highlight) and ignores
+     every token in this file. The menu follows the same rule as a row. */
+  .combo-menu {
+    position: absolute;
+    z-index: 40;
+    left: 0;
+    right: 0;
+    margin-top: 4px;
+    max-height: 15rem;
+    overflow-y: auto;
+    border: 3px solid var(--color-ink);
+    background: var(--color-paper);
+  }
+
+  .combo-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 3px solid var(--color-ink);
+    background: transparent;
+    color: var(--color-ink);
+    font-size: 0.875rem;
+    text-align: left;
+    transition:
+      background-color 120ms linear,
+      color 120ms linear;
+  }
+
+  .combo-option:last-child {
+    border-bottom: 0;
+  }
+
+  .combo-option:hover,
+  .combo-option[data-active="true"] {
+    background: var(--color-ink);
+    color: var(--color-inverse);
+  }
+
+  .combo-option:hover .combo-count,
+  .combo-option[data-active="true"] .combo-count {
+    color: var(--color-inverse);
+    opacity: 0.7;
+  }
+
+  .combo-count {
+    font-variant-numeric: tabular-nums;
+    font-size: 0.6875rem;
+    color: var(--color-faint);
   }
 
   /* --- Section heading ------------------------------------------------- */
