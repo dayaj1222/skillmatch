@@ -177,6 +177,31 @@ tests/
   test_concurrency.py  the two race tests
 ```
 
+## Theming
+
+The entire visual language lives in one place: the `@theme` block at the top of
+`frontend/src/index.css`. Components reference those values only through
+Tailwind utilities (`bg-paper`, `text-ink`, `border-rule`, `text-signal`,
+`font-display`), never as literal colours or font names.
+
+That means a retheme is a single edit:
+
+```css
+@theme {
+  --color-paper:  #f2f0e9;  /* page ground */
+  --color-ink:    #000000;  /* text and rules */
+  --color-signal: #0047ff;  /* the one accent */
+  --font-display: "Archivo Black", sans-serif;
+}
+```
+
+Change those values and the whole app changes with them. Verified: zero hex
+literals and zero `var(--color-*)` references exist outside `index.css`.
+
+Component behaviour (the ruled row, hover inversion, button and input
+treatment) lives in the `@layer components` classes in the same file:
+`.row`, `.btn`, `.field-input`, `.chip`, `.section-head`, `.block`.
+
 ## Known gaps
 
 - No migrations — `create_all()` on startup. Add Alembic before the schema
