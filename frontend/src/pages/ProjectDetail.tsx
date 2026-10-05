@@ -9,6 +9,7 @@ import {
   StatusChip,
   TimeAgo,
 } from "../components/ui";
+import { UserPlus } from "@phosphor-icons/react";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { Applicant, ProjectDetail } from "../lib/types";
@@ -264,6 +265,10 @@ export function ProjectDetailPage() {
             </Link>
           </div>
         )}
+
+        {isOwner && project.status !== "CLOSED" && spotsLeft > 0 && (
+          <InviteForm projectId={projectId} onInvited={load} />
+        )}
       </div>
 
       <div>
@@ -301,6 +306,79 @@ export function ProjectDetailPage() {
         )}
       </div>
     </div>
+  );
+}
+
+function InviteForm({ projectId, onInvited }: { projectId: number; onInvited: () => void }) {
+  const [username, setUsername] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [sent, setSent] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = username.trim().replace(/^@/, "");
+    if (!name) return;
+    setError(null);
+    setSent(null);
+    setBusy(true);
+    try {
+      await api.invite(projectId, name, message);
+      setSent(name);
+      setUsername("");
+      setMessage("");
+      onInvited();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send the invite");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="mt-4 border-3 border-rule p-4">
+      <SectionHead title="Invite someone" meta="They get a pending request" />
+      <div className="mt-4 space-y-4">
+        {error && <ErrorNote message={error} />}
+        {sent && (
+          <p className="border-3 border-active px-3 py-2 text-sm font-medium text-active">
+            Invited @{sent}. It is waiting in their dashboard.
+          </p>
+        )}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="invite-username" className="field-label">
+              Username
+            </label>
+            <input
+              id="invite-username"
+              className="field-input"
+              placeholder="bob"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              autoComplete="off"
+            />
+          </div>
+          <div>
+            <label htmlFor="invite-message" className="field-label">
+              Note (optional)
+            </label>
+            <input
+              id="invite-message"
+              className="field-input"
+              placeholder="You would be great for the schema work."
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+            />
+          </div>
+        </div>
+        <button type="submit" className="btn btn-primary" disabled={busy || !username.trim()}>
+          <UserPlus size={14} weight="bold" />
+          {busy ? "Sending" : "Send invite"}
+        </button>
+      </div>
+    </form>
   );
 }
 
