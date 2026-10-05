@@ -76,10 +76,242 @@ CREATE TRIGGER trg_application_accept
 """
 
 
+ACTIVITY_APPLICATION_FN = """
+CREATE OR REPLACE FUNCTION log_application_event() RETURNS trigger AS $$
+DECLARE
+    owner integer;
+BEGIN
+    SELECT owner_id INTO owner FROM projects WHERE id = NEW.project_id;
+
+    IF TG_OP = 'INSERT' THEN
+        -- Who opened the row decides which event this is. An invite is stored
+        -- as an application so there is one state machine, but it must not be
+        -- announced to the invitee as "they applied".
+        IF NEW.initiated_by = 'OWNER' THEN
+            INSERT INTO activity (kind, actor_id, subject_user_id, project_id)
+            VALUES ('INVITED', owner, NEW.applicant_id, NEW.project_id);
+        ELSE
+            INSERT INTO activity (kind, actor_id, subject_user_id, project_id)
+            VALUES ('APPLIED', NEW.applicant_id, owner, NEW.project_id);
+        END IF;
+        RETURN NEW;
+    END IF;
+
+    -- UPDATE: only log a real transition, not a re-save of the same status.
+    IF NEW.status IS DISTINCT FROM OLD.status THEN
+        IF NEW.status = 'ACCEPTED' THEN
+            INSERT INTO activity (kind, actor_id, subject_user_id, project_id)
+            VALUES ('ACCEPTED', owner, NEW.applicant_id, NEW.project_id);
+        ELSIF NEW.status = 'REJECTED' THEN
+            INSERT INTO activity (kind, actor_id, subject_user_id, project_id)
+            VALUES ('REJECTED', owner, NEW.applicant_id, NEW.project_id);
+        ELSIF NEW.status = 'WITHDRAWN' THEN
+            INSERT INTO activity (kind, actor_id, subject_user_id, project_id)
+            VALUES ('WITHDRAWN', NEW.applicant_id, owner, NEW.project_id);
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+"""
+
+ACTIVITY_APPLICATION_TRIGGER = """
+DROP TRIGGER IF EXISTS trg_activity_application ON applications;
+CREATE TRIGGER trg_activity_application
+    AFTER INSERT OR UPDATE OF status ON applications
+    FOR EACH ROW EXECUTE FUNCTION log_application_event();
+"""
+
+ACTIVITY_MEMBERSHIP_FN = """
+CREATE OR REPLACE FUNCTION log_membership_event() RETURNS trigger AS $$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        IF OLD.role <> 'LEADER' THEN
+            INSERT INTO activity (kind, actor_id, project_id)
+            VALUES ('LEFT', OLD.user_id, OLD.project_id);
+        END IF;
+        RETURN OLD;
+    END IF;
+    -- Inserts are logged by the accept path; only log a non-leader joining
+    -- directly (e.g. an accepted invite) to avoid duplicate feed entries.
+    IF NEW.role <> 'LEADER' AND NOT EXISTS (
+        SELECT 1 FROM activity
+        WHERE kind = 'ACCEPTED' AND subject_user_id = NEW.user_id
+          AND project_id = NEW.project_id
+    ) THEN
+        INSERT INTO activity (kind, actor_id, project_id)
+        VALUES ('JOINED', NEW.user_id, NEW.project_id);
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+"""
+
+ACTIVITY_MEMBERSHIP_TRIGGER = """
+DROP TRIGGER IF EXISTS trg_activity_membership ON memberships;
+CREATE TRIGGER trg_activity_membership
+    AFTER INSERT OR DELETE ON memberships
+    FOR EACH ROW EXECUTE FUNCTION log_membership_event();
+"""
+
+ACTIVITY_PROJECT_TRIGGER = """
+DROP TRIGGER IF EXISTS trg_activity_project ON projects;
+CREATE TRIGGER trg_activity_project
+    AFTER INSERT OR UPDATE OF status ON projects
+    FOR EACH ROW EXECUTE FUNCTION log_project_event();
+"""
+
+ACTIVITY_PROJECT_FN = """
+CREATE OR REPLACE FUNCTION log_project_event() RETURNS trigger AS $$
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        INSERT INTO activity (kind, actor_id, project_id)
+        VALUES ('PROJECT_CREATED', NEW.owner_id, NEW.id);
+    ELSIF NEW.status = 'CLOSED' AND OLD.status <> 'CLOSED' THEN
+        INSERT INTO activity (kind, actor_id, project_id)
+        VALUES ('CLOSED', NEW.owner_id, NEW.id);
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+"""
+
+ACTIVITY_ENDORSEMENT_FN = """
+CREATE OR REPLACE FUNCTION log_endorsement_event() RETURNS trigger AS $$
+DECLARE
+    skill_name text;
+BEGIN
+    SELECT name INTO skill_name FROM skills WHERE id = NEW.skill_id;
+    INSERT INTO activity (kind, actor_id, subject_user_id, detail)
+    VALUES ('ENDORSED', NEW.endorser_id, NEW.user_id, skill_name);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+"""
+
+ACTIVITY_ENDORSEMENT_TRIGGER = """
+DROP TRIGGER IF EXISTS trg_activity_endorsement ON endorsements;
+CREATE TRIGGER trg_activity_endorsement
+    AFTER INSERT ON endorsements
+    FOR EACH ROW EXECUTE FUNCTION log_endorsement_event();
+"""
+
+ACTIVITY_TASK_TRIGGER = """
+DROP TRIGGER IF EXISTS trg_activity_task ON tasks;
+CREATE TRIGGER trg_activity_task
+    AFTER UPDATE OF status ON tasks
+    FOR EACH ROW EXECUTE FUNCTION log_task_event();
+"""
+
+ACTIVITY_TASK_FN = """
+CREATE OR REPLACE FUNCTION log_task_event() RETURNS trigger AS $$
+BEGIN
+    IF NEW.status = 'DONE' AND OLD.status <> 'DONE' THEN
+        INSERT INTO activity (kind, actor_id, project_id, detail)
+        VALUES ('TASK_DONE', COALESCE(NEW.assignee_id, NEW.created_by), NEW.project_id, NEW.title);
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+"""
+
+ACTIVITY_COMMENT_TRIGGER = """
+DROP TRIGGER IF EXISTS trg_activity_comment ON project_comments;
+CREATE TRIGGER trg_activity_comment
+    AFTER INSERT ON project_comments
+    FOR EACH ROW EXECUTE FUNCTION log_comment_event();
+"""
+
+ACTIVITY_COMMENT_FN = """
+CREATE OR REPLACE FUNCTION log_comment_event() RETURNS trigger AS $$
+BEGIN
+    INSERT INTO activity (kind, actor_id, project_id, detail)
+    VALUES ('COMMENTED', NEW.author_id, NEW.project_id, left(NEW.body, 80));
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+"""
+
+ASSIGNEE_FN = """
+CREATE OR REPLACE FUNCTION check_task_assignee() RETURNS trigger AS $$
+BEGIN
+    -- A task may only be assigned to someone on the team, or to nobody.
+    IF NEW.assignee_id IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM memberships
+        WHERE project_id = NEW.project_id AND user_id = NEW.assignee_id
+    ) THEN
+        RAISE EXCEPTION 'user % is not on project %',
+            NEW.assignee_id, NEW.project_id
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+"""
+
+ASSIGNEE_TRIGGER = """
+DROP TRIGGER IF EXISTS trg_task_assignee ON tasks;
+CREATE TRIGGER trg_task_assignee
+    BEFORE INSERT OR UPDATE OF assignee_id, project_id ON tasks
+    FOR EACH ROW EXECUTE FUNCTION check_task_assignee();
+"""
+
+FLAT_THREAD_FN = """
+CREATE OR REPLACE FUNCTION check_flat_thread() RETURNS trigger AS $$
+DECLARE
+    grandparent integer;
+BEGIN
+    IF NEW.parent_id IS NOT NULL THEN
+        SELECT parent_id INTO grandparent FROM project_comments WHERE id = NEW.parent_id;
+        IF grandparent IS NOT NULL THEN
+            RAISE EXCEPTION 'replies cannot be nested more than one level'
+                USING ERRCODE = 'check_violation';
+        END IF;
+        -- A reply must be on the same project as its parent.
+        IF NOT EXISTS (
+            SELECT 1 FROM project_comments
+            WHERE id = NEW.parent_id AND project_id = NEW.project_id
+        ) THEN
+            RAISE EXCEPTION 'parent comment belongs to a different project'
+                USING ERRCODE = 'check_violation';
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+"""
+
+FLAT_THREAD_TRIGGER = """
+DROP TRIGGER IF EXISTS trg_comment_flat_thread ON project_comments;
+CREATE TRIGGER trg_comment_flat_thread
+    BEFORE INSERT ON project_comments
+    FOR EACH ROW EXECUTE FUNCTION check_flat_thread();
+"""
+
+
 def install_triggers() -> None:
     """Create (or replace) all trigger functions and triggers."""
     with engine.begin() as conn:
+        # Existing invariants.
         conn.execute(text(CAPACITY_FN))
         conn.execute(text(CAPACITY_TRIGGER))
         conn.execute(text(ACCEPT_FN))
         conn.execute(text(ACCEPT_TRIGGER))
+        # Activity feed writers.
+        conn.execute(text(ACTIVITY_APPLICATION_FN))
+        conn.execute(text(ACTIVITY_APPLICATION_TRIGGER))
+        conn.execute(text(ACTIVITY_MEMBERSHIP_FN))
+        conn.execute(text(ACTIVITY_MEMBERSHIP_TRIGGER))
+        conn.execute(text(ACTIVITY_PROJECT_FN))
+        conn.execute(text(ACTIVITY_PROJECT_TRIGGER))
+        conn.execute(text(ACTIVITY_ENDORSEMENT_FN))
+        conn.execute(text(ACTIVITY_ENDORSEMENT_TRIGGER))
+        conn.execute(text(ACTIVITY_TASK_FN))
+        conn.execute(text(ACTIVITY_TASK_TRIGGER))
+        conn.execute(text(ACTIVITY_COMMENT_FN))
+        conn.execute(text(ACTIVITY_COMMENT_TRIGGER))
+        # New constraints.
+        conn.execute(text(ASSIGNEE_FN))
+        conn.execute(text(ASSIGNEE_TRIGGER))
+        conn.execute(text(FLAT_THREAD_FN))
+        conn.execute(text(FLAT_THREAD_TRIGGER))

@@ -190,3 +190,165 @@ class UpdateBodyIn(BaseModel):
 
 class MemberDecisionIn(BaseModel):
     status: str = Field(pattern=r"^(PENDING|ACCEPTED|REJECTED|WITHDRAWN)$")
+
+
+# ---------- tasks (project board) ----------
+
+
+class TaskIn(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=4000)
+    assignee_id: int | None = None
+
+
+class TaskUpdateIn(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=4000)
+    assignee_id: int | None = None
+    # Move between columns. When set, position is recomputed server-side.
+    status: str | None = Field(default=None, pattern=r"^(TODO|DOING|DONE)$")
+    position: int | None = None
+
+
+class TaskOut(BaseModel):
+    id: int
+    project_id: int
+    title: str
+    description: str
+    status: str
+    assignee_id: int | None = None
+    assignee_username: str | None = None
+    position: int
+    created_by: int
+    created_at: dt.datetime
+    completed_at: dt.datetime | None = None
+
+
+class BoardOut(BaseModel):
+    """A project's board, grouped so the client does not have to group it."""
+
+    TODO: list[TaskOut] = Field(default_factory=list)
+    DOING: list[TaskOut] = Field(default_factory=list)
+    DONE: list[TaskOut] = Field(default_factory=list)
+
+
+# ---------- comments ----------
+
+
+class CommentIn(BaseModel):
+    body: str = Field(min_length=1, max_length=4000)
+    parent_id: int | None = None
+
+
+class CommentOut(BaseModel):
+    id: int
+    project_id: int
+    author_id: int
+    author_username: str
+    parent_id: int | None = None
+    body: str
+    created_at: dt.datetime
+    replies: list[CommentOut] = Field(default_factory=list)
+
+
+# ---------- activity ----------
+
+
+class ActivityOut(BaseModel):
+    id: int
+    kind: str
+    actor_id: int | None = None
+    actor_username: str | None = None
+    subject_user_id: int | None = None
+    subject_username: str | None = None
+    project_id: int | None = None
+    project_title: str | None = None
+    detail: str | None = None
+    created_at: dt.datetime
+
+
+# ---------- dashboard ----------
+
+
+class MyProjectOut(BaseModel):
+    id: int
+    title: str
+    status: str
+    role: str
+    member_count: int
+    capacity: int
+    open_tasks: int
+    total_tasks: int
+
+
+class MyApplicationOut(BaseModel):
+    application_id: int
+    project_id: int
+    project_title: str
+    status: str
+    created_at: dt.datetime
+
+
+class StatsOut(BaseModel):
+    projects_led: int
+    teams_joined: int
+    applications_pending: int
+    endorsements_received: int
+    tasks_assigned_open: int
+    profile_completeness: int
+    unread_activity: int
+
+
+class DashboardOut(BaseModel):
+    stats: StatsOut
+    needs_attention: list[ActivityOut] = Field(default_factory=list)
+    recent_activity: list[ActivityOut] = Field(default_factory=list)
+
+
+# ---------- invitations ----------
+
+
+class InviteIn(BaseModel):
+    username: str = Field(min_length=1, max_length=40)
+    message: str = Field(default="", max_length=4000)
+
+
+# ---------- skill browse ----------
+
+
+class SkillDetailOut(BaseModel):
+    id: int
+    name: str
+    category: str | None = None
+    people: int
+    top_people: list[PublicProfileOut] = Field(default_factory=list)
+
+
+# ---------- schema / lab page ----------
+
+
+class TableStatsOut(BaseModel):
+    name: str
+    rows: int
+
+
+class ConstraintOut(BaseModel):
+    table: str
+    name: str
+    kind: str
+    definition: str
+
+
+class TriggerOut(BaseModel):
+    name: str
+    table: str
+    timing: str
+    event: str
+
+
+class SchemaOut(BaseModel):
+    tables: list[TableStatsOut]
+    constraints: list[ConstraintOut]
+    triggers: list[TriggerOut]
+    indexes: int
+    fk_count: int

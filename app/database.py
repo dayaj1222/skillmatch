@@ -52,6 +52,29 @@ def init_db() -> None:
 
     Base.metadata.create_all(bind=engine)
 
+    # create_all() only creates *missing* tables; it never alters an existing
+    # one. This one column was added after the first release, so bring older
+    # databases forward explicitly. Idempotent: safe to run on every boot.
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "ALTER TABLE applications "
+                "ADD COLUMN IF NOT EXISTS initiated_by varchar(9) "
+                "NOT NULL DEFAULT 'APPLICANT'"
+            )
+        )
+        # ADD CONSTRAINT has no IF NOT EXISTS in Postgres; check the catalog.
+        conn.execute(
+            text(
+                "DO $$ BEGIN "
+                "IF NOT EXISTS (SELECT 1 FROM pg_constraint "
+                "WHERE conname = 'ck_application_initiated_by') THEN "
+                "ALTER TABLE applications ADD CONSTRAINT ck_application_initiated_by "
+                "CHECK (initiated_by IN ('APPLICANT','OWNER')); "
+                "END IF; END $$;"
+            )
+        )
+
     # Triggers for the invariants constraints cannot express (capacity ceiling,
     # accept-creates-membership). Imported here to avoid a circular import at
     # module load time.

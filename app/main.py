@@ -10,7 +10,17 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .database import init_db
-from .routers import auth, profiles, projects, search, skills
+from .routers import (
+    auth,
+    comments,
+    dashboard,
+    profiles,
+    projects,
+    schema,
+    search,
+    skills,
+    tasks,
+)
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
@@ -28,6 +38,10 @@ app.include_router(profiles.router)
 app.include_router(skills.router)
 app.include_router(search.router)
 app.include_router(projects.router)
+app.include_router(tasks.router)
+app.include_router(comments.router)
+app.include_router(dashboard.router)
+app.include_router(schema.router)
 
 
 @app.get("/api/health")
