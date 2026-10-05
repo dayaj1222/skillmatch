@@ -97,10 +97,10 @@ function ProfileHeader({
   return (
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-0">
-        <h1 className="text-[1.5rem] font-semibold tracking-[-0.02em] text-ink">
+        <h1 className="display text-[1.75rem]">
           {profile.full_name || profile.username}
         </h1>
-        <p className="tabular mt-0.5 text-[0.8125rem] text-faint">
+        <p className="tnum mt-0.5 text-[0.8125rem] text-faint">
           @{profile.username}
           {meta ? ` · ${meta}` : ""}
         </p>
@@ -239,11 +239,11 @@ function SkillRow({
 
       <div className="flex items-center gap-3">
         {skill.years > 0 && (
-          <span className="tabular text-[0.8125rem] text-faint">
+          <span className="tnum text-[0.8125rem] text-faint">
             {skill.years} {skill.years === 1 ? "yr" : "yrs"}
           </span>
         )}
-        <span className="tabular flex items-center gap-1 text-[0.8125rem] text-muted">
+        <span className="tnum flex items-center gap-1 text-[0.8125rem] text-muted">
           <SealCheck
             size={14}
             weight={count > 0 ? "fill" : "regular"}

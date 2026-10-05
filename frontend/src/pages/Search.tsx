@@ -74,9 +74,7 @@ export function SearchPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-[1.5rem] font-semibold tracking-[-0.02em] text-ink">
-          Find people
-        </h1>
+        <h1 className="display text-[1.75rem]">Find people</h1>
         <p className="mt-1 max-w-[58ch] text-sm text-muted">
           Name the skills a project needs. Results rank by how many of them each person has at
           the level you ask for.
@@ -128,7 +126,7 @@ export function SearchPage() {
                       className="border-3 border-rule px-2 py-1 text-[0.8125rem] text-ink hover:bg-ink hover:text-inverse"
                     >
                       {s.name}
-                      <span className="tabular ml-1.5 text-[0.6875rem] text-faint">
+                      <span className="tnum ml-1.5 text-[0.6875rem] text-faint">
                         {s.people}
                       </span>
                     </button>
@@ -257,7 +255,7 @@ function PersonRow({
           >
             {person.full_name || person.username}
           </Link>
-          <span className="tabular text-[0.8125rem] text-faint">
+          <span className="tnum text-[0.8125rem] text-faint">
             @{person.username}
           </span>
         </div>
@@ -276,7 +274,7 @@ function PersonRow({
         <p className="mt-0.5 text-[0.875rem] text-muted">{person.headline}</p>
       )}
 
-      {meta && <p className="tabular mt-1 text-[0.75rem] text-faint">{meta}</p>}
+      {meta && <p className="tnum mt-1 text-[0.75rem] text-faint">{meta}</p>}
 
       {person.skills.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">

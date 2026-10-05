@@ -17,20 +17,16 @@ export function AuthLayout({
   footer: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-[] px-4 py-10">
+    <div className="flex min-h-[100dvh] items-center justify-center bg-paper px-4 py-10">
       <div className="w-full max-w-[380px]">
         <Link to="/" className="mb-8 flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center  bg-ink text-[12px] font-bold text-white">
+          <span className="flex h-7 w-7 items-center justify-center bg-ink text-[12px] font-bold text-inverse">
             SM
           </span>
-          <span className="text-base font-semibold tracking-[-0.01em] text-ink">
-            SkillMatch
-          </span>
+          <span className="display text-base">SkillMatch</span>
         </Link>
 
-        <h1 className="text-[1.375rem] font-semibold tracking-[-0.02em] text-ink">
-          {title}
-        </h1>
+        <h1 className="display text-[1.5rem]">{title}</h1>
         <p className="mt-1 text-sm text-muted">{subtitle}</p>
 
         <div className="mt-6">{children}</div>

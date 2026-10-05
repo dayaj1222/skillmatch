@@ -120,7 +120,7 @@ export function ProjectFormPage() {
   return (
     <div className="mx-auto max-w-[640px] space-y-6">
       <div>
-        <h1 className="text-[1.5rem] font-semibold tracking-[-0.02em] text-ink">
+        <h1 className="display text-[1.75rem]">
           {isEdit ? "Edit project" : "New project"}
         </h1>
         <p className="mt-1 text-sm text-muted">
