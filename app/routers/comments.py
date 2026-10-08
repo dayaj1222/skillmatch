@@ -8,17 +8,11 @@ from sqlalchemy.orm import Session
 
 from ..auth import get_current_user
 from ..database import get_db
-from ..models import Membership, Project, ProjectComment, User
+from ..models import ProjectComment, User
+from ..projects_service import require_member
 from ..schemas import CommentIn, CommentOut
 
 router = APIRouter(prefix="/api/projects/{project_id}/comments", tags=["comments"])
-
-
-def _require_member(db: Session, project_id: int, user_id: int) -> None:
-    if db.get(Project, project_id) is None:
-        raise HTTPException(status_code=404, detail="No such project")
-    if db.get(Membership, (project_id, user_id)) is None:
-        raise HTTPException(status_code=403, detail="Only team members can do that")
 
 
 def _build_thread(db: Session, project_id: int) -> list[CommentOut]:
@@ -58,7 +52,7 @@ def list_comments(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[CommentOut]:
-    _require_member(db, project_id, user.id)
+    require_member(db, project_id, user.id)
     return _build_thread(db, project_id)
 
 
@@ -69,7 +63,7 @@ def post_comment(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[CommentOut]:
-    _require_member(db, project_id, user.id)
+    require_member(db, project_id, user.id)
 
     if payload.parent_id is not None:
         parent = db.get(ProjectComment, payload.parent_id)

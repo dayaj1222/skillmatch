@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Plus, SealCheck, Trash } from "@phosphor-icons/react";
 
-import { Empty, ErrorNote, LevelTicks, SectionHead, SkillCombo, SkeletonRows } from "../components/ui";
+import { Empty, ErrorNote, LevelTicks, NumberInput, SectionHead, Select, SkillCombo, Skeleton, SkeletonRows } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import type { Profile, ProfileSkill, PublicProfile, Skill } from "../lib/types";
+import type { Profile, ProfileSkill, Project, PublicProfile, Skill } from "../lib/types";
 
 /**
  * Profile page.
@@ -26,20 +26,25 @@ export function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!username) return;
-    setLoading(true);
-    try {
-      const pub = await api.publicProfile(username);
-      setProfile(pub);
-      if (isMe) setMine(await api.myProfile());
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load profile");
-    } finally {
-      setLoading(false);
-    }
-  }, [username, isMe]);
+  // Background refreshes never touch `loading`, so the page (and any
+  // unsaved form state in it) stays mounted. Only the first load unmounts.
+  const load = useCallback(
+    async (background = false) => {
+      if (!username) return;
+      if (!background) setLoading(true);
+      try {
+        const pub = await api.publicProfile(username);
+        setProfile(pub);
+        if (isMe) setMine(await api.myProfile());
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not load profile");
+      } finally {
+        if (!background) setLoading(false);
+      }
+    },
+    [username, isMe],
+  );
 
   useEffect(() => {
     void load();
@@ -47,7 +52,7 @@ export function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-[720px]">
+      <div className="mx-auto max-w-[1000px]">
         <SkeletonRows rows={3} />
       </div>
     );
@@ -55,14 +60,14 @@ export function ProfilePage() {
 
   if (error || !profile) {
     return (
-      <div className="mx-auto max-w-[720px]">
+      <div className="mx-auto max-w-[1000px]">
         <ErrorNote message={error ?? "Profile not found"} />
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-[720px] space-y-8">
+    <div className="mx-auto max-w-[1000px] space-y-8">
       <ProfileHeader
         profile={profile}
         isMe={isMe}
@@ -71,9 +76,9 @@ export function ProfilePage() {
       />
 
       {isMe && editing && mine ? (
-        <EditProfile profile={mine} onSaved={load} />
+        <EditProfile profile={mine} onSaved={() => void load(true)} />
       ) : (
-        <ReadOnlyProfile profile={profile} isMe={isMe} onChanged={load} />
+        <ReadOnlyProfile profile={profile} isMe={isMe} onChanged={() => void load(true)} />
       )}
     </div>
   );
@@ -121,10 +126,167 @@ function ProfileHeader({
         )}
       </div>
 
-      {isMe && (
+      {isMe ? (
         <button type="button" onClick={onToggleEdit} className="btn btn-secondary">
           {editing ? "Done editing" : "Edit profile"}
         </button>
+      ) : (
+        <InviteButton username={profile.username} />
+      )}
+    </div>
+  );
+}
+
+/** Invite this person to one of my projects. Only renders when signed in. */
+function InviteButton({ username }: { username: string }) {
+  const { user } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [candidates, setCandidates] = useState<Project[] | null>(null);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+  const [projectId, setProjectId] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [sent, setSent] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  // Close when focus or a click leaves the panel, or on Escape.
+  useEffect(() => {
+    if (!open) return;
+    const onDocDown = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open ]);
+
+  if (!user) return null;
+
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    setError(null);
+    setSent(null);
+    if (next && candidates === null) {
+      setLoadingProjects(true);
+      api
+        .projects({ open_only: true, limit: 50 })
+        .then((all) =>
+          setCandidates(
+            all.filter(
+              (p) =>
+                p.owner_username === user.username &&
+                p.status !== "CLOSED" &&
+                p.member_count < p.capacity,
+            ),
+          ),
+        )
+        .catch(() => setCandidates([]))
+        .finally(() => setLoadingProjects(false));
+    }
+  };
+
+  const send = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!projectId) return;
+    setBusy(true);
+    setError(null);
+    setSent(null);
+    try {
+      await api.invite(Number(projectId), username, message);
+      setSent(candidates?.find((p) => p.id === Number(projectId))?.title ?? "project");
+      setMessage("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send the invite");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="relative shrink-0" ref={wrapRef}>
+      <button type="button" onClick={toggle} className="btn btn-secondary">
+        {open ? "Close" : "Invite"}
+      </button>
+
+      {open && (
+        <form
+          onSubmit={send}
+          className="block absolute right-0 z-30 mt-2 w-[min(22rem,80vw)] animate-pop space-y-4 bg-paper p-4 shadow-[0_8px_24px_-8px_rgb(20_22_26/0.14),0_2px_6px_-2px_rgb(20_22_26/0.08)]"
+        >
+          <div>
+            <label htmlFor="profile-invite-project" className="field-label">
+              Project
+            </label>
+            {loadingProjects || candidates === null ? (
+              <Skeleton className="h-[2.375rem] w-full rounded-sm" />
+            ) : candidates.length === 0 ? (
+              <p className="text-[0.875rem] text-muted">
+                You are not staffing any project right now.{" "}
+                <Link to="/projects/new" className="font-medium text-signal hover:underline">
+                  Start one
+                </Link>
+              </p>
+            ) : (
+              <Select
+                id="profile-invite-project"
+                value={projectId}
+                onChange={(v) => {
+                  setProjectId(v);
+                  setSent(null);
+                }}
+                options={[
+                  { value: "", label: "Choose a project" },
+                  ...candidates.map((p) => {
+                    const spots = p.capacity - p.member_count;
+                    return {
+                      value: String(p.id),
+                      label: `${p.title} (${spots} ${spots === 1 ? "spot" : "spots"} left)`,
+                    };
+                  }),
+                ]}
+              />
+            )}
+          </div>
+
+          {candidates !== null && candidates.length > 0 && (
+            <>
+              {error && <ErrorNote message={error} />}
+              {sent && (
+                <p className="rounded-sm border border-active px-3 py-2 text-sm font-medium text-active">
+                  Invited @{username} to {sent}.
+                </p>
+              )}
+              <div>
+                <label htmlFor="profile-invite-message" className="field-label">
+                  Note (optional)
+                </label>
+                <input
+                  id="profile-invite-message"
+                  className="field-input"
+                  placeholder="You would be great for this."
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  autoComplete="off"
+                />
+              </div>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={busy || !projectId}
+              >
+                {busy ? "Sending" : "Send invite"}
+              </button>
+            </>
+          )}
+        </form>
       )}
     </div>
   );
@@ -177,7 +339,7 @@ function ReadOnlyProfile({
             }
           />
         ) : (
-          <ul className="border-x-3 border-b-3 border-rule">
+          <ul className="register border-b border-rule">
             {profile.skills.map((s) => (
               <SkillRow
                 key={s.skill_id}
@@ -303,7 +465,7 @@ function EditProfile({ profile, onSaved }: { profile: Profile; onSaved: () => vo
 
   return (
     <div className="space-y-8">
-      <form onSubmit={submit} className="border-3 border-rule space-y-4 p-5">
+      <form onSubmit={submit} className="block space-y-4 p-5">
         <SectionHead title="Your details" meta="Shown on your public profile." />
         {error && <ErrorNote message={error} />}
 
@@ -459,11 +621,23 @@ function SkillEditor({ onSaved }: { onSaved: () => void }) {
 
   const remove = (skillId: number) => setCurrent((c) => c.filter((s) => s.skill_id !== skillId));
 
+  const refreshOwnSkills = useCallback(async () => {
+    if (!user) return;
+    try {
+      setCurrent((await api.publicProfile(user.username)).skills);
+    } catch {
+      /* keep the local list; the error surfaces on the next save */
+    }
+  }, [user]);
+
   const persist = async () => {
     setSaving(true);
     setError(null);
     try {
       await api.setSkills(current.map((s) => ({ name: s.name, level: s.level, years: s.years })));
+      // Reload only this component's list. The parent refresh is background,
+      // so the details form above keeps any unsaved edits.
+      await refreshOwnSkills();
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save skills");
@@ -477,7 +651,7 @@ function SkillEditor({ onSaved }: { onSaved: () => void }) {
   );
 
   return (
-    <div className="border-3 border-rule p-5">
+    <div className="block p-5">
       <SectionHead
         title="Skills"
         meta="Pick from the shared list so two people typing the same skill get one entry."
@@ -490,47 +664,43 @@ function SkillEditor({ onSaved }: { onSaved: () => void }) {
           skills is invisible to search.
         </p>
       ) : (
-        <ul className="mb-4 divide-y divide-rule border-x-3 border-b-3 border-rule">
+        <ul className="register mb-4 border-b border-rule">
           {current.map((s) => (
             <li key={s.skill_id} className="flex flex-wrap items-center gap-3 px-3 py-2.5">
               <span className="min-w-[8rem] flex-1 text-[0.9375rem] text-ink">
                 {s.name}
               </span>
 
-              <label className="flex items-center gap-1.5 text-[0.8125rem] text-muted">
+              <span className="flex items-center gap-1.5 text-[0.8125rem] text-muted">
                 Level
-                <select
-                  className="field-input h-7 w-[4.5rem] px-1.5 text-[0.8125rem]"
-                  value={s.level}
-                  onChange={(e) =>
-                    setCurrent((c) =>
-                      c.map((x) =>
-                        x.skill_id === s.skill_id ? { ...x, level: Number(e.target.value) } : x,
-                      ),
-                    )
-                  }
-                >
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <span className="w-[4.5rem]">
+                  <Select
+                    aria-label={`Level for ${s.name}`}
+                    className="h-7 px-1.5 text-[0.8125rem]"
+                    value={String(s.level)}
+                    onChange={(v) =>
+                      setCurrent((c) =>
+                        c.map((x) =>
+                          x.skill_id === s.skill_id ? { ...x, level: Number(v) } : x,
+                        ),
+                      )
+                    }
+                    options={[1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: String(n) }))}
+                  />
+                </span>
+              </span>
 
               <label className="flex items-center gap-1.5 text-[0.8125rem] text-muted">
                 Years
-                <input
-                  type="number"
+                <NumberInput
+                  aria-label={`Years for ${s.name}`}
                   min={0}
                   max={60}
-                  className="field-input h-7 w-[4rem] px-1.5 text-[0.8125rem]"
+                  className="h-7 w-[4rem] px-1.5 text-[0.8125rem]"
                   value={s.years}
-                  onChange={(e) =>
+                  onChange={(v) =>
                     setCurrent((c) =>
-                      c.map((x) =>
-                        x.skill_id === s.skill_id ? { ...x, years: Number(e.target.value) } : x,
-                      ),
+                      c.map((x) => (x.skill_id === s.skill_id ? { ...x, years: v } : x)),
                     )
                   }
                 />
@@ -568,32 +738,29 @@ function SkillEditor({ onSaved }: { onSaved: () => void }) {
           <label htmlFor="skill-level" className="field-label">
             Level
           </label>
-          <select
+          <Select
             id="skill-level"
-            className="field-input w-[6rem]"
-            value={pendingLevel}
-            onChange={(e) => setPendingLevel(Number(e.target.value))}
-          >
-            {[1, 2, 3, 4, 5].map((n) => (
-              <option key={n} value={n}>
-                {n} - {["Beginner", "Basic", "Competent", "Strong", "Expert"][n - 1]}
-              </option>
-            ))}
-          </select>
+            className="w-[9rem]"
+            value={String(pendingLevel)}
+            onChange={(v) => setPendingLevel(Number(v))}
+            options={[1, 2, 3, 4, 5].map((n) => ({
+              value: String(n),
+              label: `${["Beginner", "Basic", "Competent", "Strong", "Expert"][n - 1]} (${n})`,
+            }))}
+          />
         </div>
 
         <div>
           <label htmlFor="skill-years" className="field-label">
             Years
           </label>
-          <input
+          <NumberInput
             id="skill-years"
-            type="number"
             min={0}
             max={60}
-            className="field-input w-[5rem]"
+            className="w-[5rem]"
             value={pendingYears}
-            onChange={(e) => setPendingYears(Number(e.target.value))}
+            onChange={setPendingYears}
           />
         </div>
 

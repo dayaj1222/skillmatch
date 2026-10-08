@@ -10,12 +10,13 @@ join-and-aggregate, not in a Python loop.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Profile, Skill, User, UserSkill
 from ..schemas import PublicProfileOut
+from ..skills_service import public_profiles_for
 
 router = APIRouter(prefix="/api", tags=["search"])
 
@@ -24,6 +25,22 @@ def _ids_for(db: Session, names: list[str]) -> list[int]:
     if not names:
         return []
     return list(db.scalars(select(Skill.id).where(Skill.name.in_(names))).all())
+
+
+def _free_text_filter(q: str):
+    """The one definition of the free-text match.
+
+    Matches username, full name, headline, or bio. Shared by both branches of
+    the search so typing free text filters in every case, not only when skills
+    are selected.
+    """
+    like = f"%{q}%"
+    return or_(
+        User.username.ilike(like),
+        Profile.full_name.ilike(like),
+        Profile.headline.ilike(like),
+        Profile.bio.ilike(like),
+    )
 
 
 @router.get("/search", response_model=list[PublicProfileOut])
@@ -36,16 +53,21 @@ def search_people(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ) -> list[PublicProfileOut]:
-    from .profiles import public_profile  # local import avoids a circular import
-
     skill_ids = _ids_for(db, skill)
 
-    # No skill filter: behave like the directory, ordered by name.
+    # No skill filter: behave like the directory, ordered by name, but still
+    # honour the free-text query.
     if not skill_ids:
+        stmt = select(User)
+        if q:
+            stmt = stmt.join(Profile, Profile.user_id == User.id).where(
+                _free_text_filter(q)
+            )
         users = db.scalars(
-            select(User).order_by(User.username).limit(limit).offset(offset)
+            stmt.order_by(User.username).limit(limit).offset(offset)
         ).all()
-        return [public_profile(u.username, db) for u in users]
+        profiles = public_profiles_for(db, [u.id for u in users])
+        return [profiles[u.id] for u in users if u.id in profiles]
 
     matched = func.count(func.distinct(UserSkill.skill_id))
     depth = func.sum(UserSkill.level)
@@ -61,20 +83,14 @@ def search_people(
         stmt = stmt.having(matched == len(skill_ids))
 
     if q:
-        like = f"%{q}%"
         stmt = stmt.join(Profile, Profile.user_id == User.id).where(
-            Profile.full_name.ilike(like)
-            | Profile.headline.ilike(like)
-            | Profile.bio.ilike(like)
-            | User.username.ilike(like)
+            _free_text_filter(q)
         )
 
     stmt = stmt.order_by(matched.desc(), depth.desc(), User.username)
     rows = db.execute(stmt.limit(limit).offset(offset)).all()
 
-    out: list[PublicProfileOut] = []
-    for user_id, _matched, _depth in rows:
-        user = db.get(User, user_id)
-        if user is not None:
-            out.append(public_profile(user.username, db))
-    return out
+    # One batch read for the whole page, rather than a profile read per row.
+    ranked_ids = [user_id for user_id, _matched, _depth in rows]
+    profiles = public_profiles_for(db, ranked_ids)
+    return [profiles[uid] for uid in ranked_ids if uid in profiles]

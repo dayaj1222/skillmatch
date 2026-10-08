@@ -4,47 +4,80 @@
   SkillMatch theme.
 
   EVERYTHING visual lives in this @theme block. Components reference these as
-  Tailwind utilities (bg-paper, text-ink, border-rule, font-display, rounded-none),
+  Tailwind utilities (bg-paper, text-ink, border-rule, font-display, rounded-*),
   so changing the look means editing this file, not grepping 16 components.
 
-  Direction: industrial brutalist. Hard 3px rules, zero radius, heavy uppercase
-  display type, tabular figures for the numbers that are the app's actual subject
-  (capacity, coverage). True black on warm grey paper.
+  Direction: "the match". The product's subject is *fit* — a person against a
+  project's needs, skill by skill. So the one idea the interface spends its
+  boldness on is the coverage track: a filled/empty bar that shows, at a
+  glance, how much of what a project needs a person actually holds. Everything
+  around it stays quiet — cool drafting neutrals, hairline rules, one accent.
 
-  To retheme: change the values here. To restyle component behaviour (padding,
-  borders, inversion), edit the @layer components classes below. Nothing else
-  in the codebase contains a colour or a font name.
+  Chosen against the obvious: this deliberately avoids the warm-cream + serif +
+  terracotta look, which is the current default for generated interfaces and
+  says nothing about matching. The palette here is cool, the rules are thin,
+  and the only saturated colour means "covered".
 */
 
 @theme {
   /* --- Surfaces and ink ------------------------------------------------ */
-  --color-paper: #f2f0e9; /* page ground, warm grey (not cream #f4f1ea) */
-  --color-ink: #000000; /* true black; brutalism wants real black */
-  --color-rule: #000000; /* border colour: rules carry structure */
-  --color-muted: #55524a; /* secondary text */
-  --color-faint: #8a867c; /* tertiary text, disabled */
+  --color-paper: #ffffff; /* page ground: clean white */
+  --color-surface: #edf0f4; /* cool off-white for recessed blocks (blue-tinted, not cream) */
+  --color-ink: #14161a; /* blue-black; softer than pure black */
+  --color-rule: #ccd2db; /* hairline border: visible structure, still quiet */
+  --color-rule-strong: #a6afbc; /* heavier divider where hierarchy needs it */
+  --color-muted: #3f4650; /* secondary text */
+  --color-faint: #6d7684; /* tertiary text, disabled */
   --color-field: #ffffff; /* input ground */
-  --color-inverse: #f2f0e9; /* text on an inverted (black) surface */
+  --color-inverse: #ffffff; /* text on a dark surface */
 
   /* --- One accent ------------------------------------------------------ */
-  --color-signal: #0047ff; /* selection, focus, active nav */
+  --color-signal: #2b4eff; /* selection, focus, active nav, links */
 
-  /* --- State (semantic only, never decoration) ------------------------- */
-  --color-open: #0047ff;
+  /* --- Match semantics (the product's actual meaning) ------------------ */
+  --color-match: #0e8f6e; /* full coverage: every requirement met */
+  --color-partial: #b45309; /* partial coverage: some met */
+  --color-gap: #c2410c; /* shortfall: the missing skills */
+
+  /* --- Lifecycle state (semantic only, never decoration) --------------- */
+  --color-open: #2b4eff;
   --color-forming: #b45309;
-  --color-active: #15803d;
-  --color-closed: #55524a;
-  --color-deny: #b91c1c;
+  --color-active: #0e8f6e;
+  --color-closed: #3f4650;
+  --color-deny: #c2410c;
 
   /* --- Type ------------------------------------------------------------ */
-  --font-display: "Archivo Black", "Archivo", system-ui, sans-serif;
-  --font-sans: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Two families, clearly distinct roles. Inter for the tool; Newsreader —
+     a serif — reserved for titles, so human-written things read as authored. */
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Newsreader", Georgia, "Times New Roman", serif;
 
-  /* --- Shape: one scale, and it is zero -------------------------------- */
-  --radius-none: 0px;
+  /* Mono for data read from the database (constraint names, column names). */
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  /* --- Rules: one weight ----------------------------------------------- */
-  --border-width-rule: 3px;
+  /* --- Shape: soft, consistent, small -------------------------------- */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+
+  /* --- Rules: one hairline weight ------------------------------------- */
+  --border-width-rule: 1px;
+
+  /* --- Motion ---------------------------------------------------------- */
+  /* One pop for floating panels (invite sheet, menus). Fades and settles
+     from 4px up; the global reduced-motion rule already stills it. */
+  --animate-pop: pop 140ms ease-out;
+
+  @keyframes pop {
+    from {
+      opacity: 0;
+      transform: translateY(-4px) scale(0.99);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
 }
 
 @layer base {
@@ -52,12 +85,14 @@
     background-color: var(--color-paper);
     color: var(--color-ink);
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 
   body {
     font-family: var(--font-sans);
     font-size: 15px;
-    line-height: 1.55;
+    line-height: 1.6;
+    letter-spacing: -0.006em;
   }
 
   /* Every number that sits in a column aligns. Capacity and coverage are the
@@ -66,15 +101,16 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* One focus treatment, everywhere, loud enough to see on black. */
+  /* One focus treatment, everywhere. */
   :focus-visible {
-    outline: 3px solid var(--color-signal);
+    outline: 2px solid var(--color-signal);
     outline-offset: 2px;
+    border-radius: var(--radius-xs);
   }
 
   ::selection {
-    background: var(--color-ink);
-    color: var(--color-inverse);
+    background: color-mix(in srgb, var(--color-signal) 22%, transparent);
+    color: var(--color-ink);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -90,36 +126,37 @@
 
 @layer components {
   /* --- Display type ---------------------------------------------------- */
-  /* Heavy, tight, uppercase. Used for page titles and row titles. */
+  /* Serif, sentence case, tight. Reserved for titles and names: the things
+     a person wrote. Never used for labels. */
   .display {
     font-family: var(--font-display);
-    text-transform: uppercase;
-    letter-spacing: -0.01em;
-    line-height: 0.98;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    line-height: 1.12;
   }
 
   /* --- Controls -------------------------------------------------------- */
-  /* Square, ruled, high contrast. Inversion is the only hover effect. */
   .btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    height: 2.5rem;
-    padding-inline: 1rem;
-    border: 3px solid var(--color-ink);
-    font-size: 0.8125rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+    height: 2.375rem;
+    padding-inline: 0.875rem;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    font-weight: 550;
+    letter-spacing: -0.006em;
     white-space: nowrap;
     transition:
-      background-color 120ms linear,
-      color 120ms linear;
+      background-color 130ms ease,
+      border-color 130ms ease,
+      color 130ms ease;
   }
 
   .btn:disabled {
-    opacity: 0.35;
+    opacity: 0.45;
     cursor: not-allowed;
   }
 
@@ -130,64 +167,71 @@
 
   .btn-primary:hover:not(:disabled) {
     background: var(--color-signal);
-    border-color: var(--color-signal);
-    color: var(--color-inverse);
   }
 
   .btn-secondary {
-    background: transparent;
+    background: var(--color-paper);
     color: var(--color-ink);
+    border-color: var(--color-rule-strong);
   }
 
   .btn-secondary:hover:not(:disabled) {
-    background: var(--color-ink);
-    color: var(--color-inverse);
+    border-color: var(--color-ink);
+    background: var(--color-surface);
   }
 
   .btn-ghost {
     background: transparent;
-    border-color: transparent;
     color: var(--color-muted);
   }
 
   .btn-ghost:hover:not(:disabled) {
     color: var(--color-ink);
-    border-color: var(--color-ink);
+    background: var(--color-surface);
   }
 
   .btn-danger {
     background: transparent;
-    border-color: transparent;
     color: var(--color-deny);
   }
 
   .btn-danger:hover:not(:disabled) {
-    background: var(--color-deny);
-    color: var(--color-inverse);
-    border-color: var(--color-deny);
+    background: color-mix(in srgb, var(--color-deny) 10%, transparent);
   }
 
   /* --- Form fields ----------------------------------------------------- */
-  /* Flat and ruled, but tall enough to type in comfortably. */
   .field-label {
     display: block;
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    margin-bottom: 0.375rem;
+    font-size: 0.8125rem;
+    font-weight: 550;
+    letter-spacing: -0.004em;
+    margin-bottom: 0.3125rem;
+    color: var(--color-ink);
   }
 
   .field-input {
     width: 100%;
-    height: 2.5rem;
+    height: 2.375rem;
     padding-inline: 0.75rem;
     background: var(--color-field);
-    border: 3px solid var(--color-ink);
-    border-radius: 0;
+    border: 1px solid var(--color-rule-strong);
+    border-radius: var(--radius-sm);
     font-size: 0.9375rem;
     color: var(--color-ink);
     font-family: inherit;
+    transition:
+      border-color 130ms ease,
+      box-shadow 130ms ease;
+  }
+
+  .field-input:hover {
+    border-color: var(--color-faint);
+  }
+
+  .field-input:focus {
+    outline: none;
+    border-color: var(--color-signal);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-signal) 16%, transparent);
   }
 
   .field-input::placeholder {
@@ -195,19 +239,18 @@
   }
 
   .field-input:disabled {
-    background: var(--color-paper);
+    background: var(--color-surface);
     color: var(--color-faint);
   }
 
   textarea.field-input {
     height: auto;
     padding-block: 0.625rem;
-    line-height: 1.5;
+    line-height: 1.55;
     resize: vertical;
   }
 
-  /* Number fields: the native spinner is OS chrome (grey, rounded) and cannot
-     be themed. Remove it; the square ruled field is the control. */
+  /* Number fields: the native spinner is OS chrome and cannot be themed. */
   .field-input[type="number"] {
     appearance: textfield;
     -moz-appearance: textfield;
@@ -220,46 +263,60 @@
   }
 
   .field-help {
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
     color: var(--color-muted);
     margin-top: 0.375rem;
   }
 
   .field-error {
-    font-size: 0.75rem;
-    font-weight: 700;
+    font-size: 0.8125rem;
+    font-weight: 550;
     color: var(--color-deny);
     margin-top: 0.375rem;
   }
 
   /* --- Surfaces -------------------------------------------------------- */
-  /* A ruled block. No shadow, no radius: the rule is the structure. */
+  /* A bordered block. Soft radius, hairline rule, no shadow. */
   .block {
-    border: 3px solid var(--color-ink);
-    background: transparent;
+    border: 1px solid var(--color-rule);
+    border-radius: var(--radius-md);
+    background: var(--color-paper);
+  }
+
+  /* The instrument: the one panel on a page that is a set of controls.
+     Tinted ground, no hard border, so it reads as a tool distinct from the
+     content it filters. Used for search on the directory pages. */
+  .panel-instrument {
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    border: 1px solid var(--color-rule);
+  }
+
+  /* A register: a list of like records. No per-row box — one hairline
+     between rows, so the eye reads a column of data, not a stack of cards. */
+  .register {
+    border-top: 1px solid var(--color-rule);
+  }
+
+  .register > * + * {
+    border-top: 1px solid var(--color-rule);
   }
 
   /* The register row. This is the app's primary unit.
-     Hovering inverts it. That is the only motion in the interface. */
+     Hover raises it a half-step: surface tint plus a signal edge. */
   .row {
     display: block;
-    border-bottom: 3px solid var(--color-ink);
+    border-bottom: 1px solid var(--color-rule);
     background: transparent;
     color: var(--color-ink);
     transition:
-      background-color 120ms linear,
-      color 120ms linear;
+      background-color 130ms ease,
+      box-shadow 130ms ease;
   }
 
   .row:hover {
-    background: var(--color-ink);
-    color: var(--color-inverse);
-  }
-
-  /* Inside an inverted row, muted text must flip too or it vanishes. */
-  .row:hover .row-dim {
-    color: var(--color-inverse);
-    opacity: 0.75;
+    background: var(--color-surface);
+    box-shadow: inset 3px 0 0 var(--color-signal);
   }
 
   .row-dim {
@@ -267,35 +324,38 @@
   }
 
   /* --- Status chip ----------------------------------------------------- */
-  /* Flat, ruled, uppercase. State only, never decoration. */
+  /* Tinted pill. State only, never decoration. Colour carries meaning. */
   .chip {
     display: inline-flex;
     align-items: center;
     height: 1.375rem;
     padding-inline: 0.5rem;
-    border: 2px solid currentColor;
-    border-radius: 0;
-    font-size: 0.6875rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
+    border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, currentColor 14%, transparent);
+    font-size: 0.75rem;
+    font-weight: 550;
     white-space: nowrap;
   }
 
   /* --- Skill picker ---------------------------------------------------- */
-  /* A text field with a ruled menu beneath it. Replaces <datalist>, whose
-     popup is drawn by the OS (dark, rounded, purple highlight) and ignores
-     every token in this file. The menu follows the same rule as a row. */
+  /* A text field with a menu beneath it. Replaces <datalist>, whose popup is
+     drawn by the OS and ignores every token in this file. */
   .combo-menu {
     position: absolute;
     z-index: 40;
     left: 0;
     right: 0;
-    margin-top: 4px;
+    margin-top: 6px;
     max-height: 15rem;
     overflow-y: auto;
-    border: 3px solid var(--color-ink);
+    padding: 4px;
+    border: 1px solid var(--color-rule);
+    border-radius: var(--radius-md);
     background: var(--color-paper);
+    box-shadow:
+      0 8px 24px -8px rgb(20 22 26 / 0.14),
+      0 2px 6px -2px rgb(20 22 26 / 0.08);
   }
 
   .combo-option {
@@ -304,52 +364,60 @@
     justify-content: space-between;
     gap: 0.75rem;
     width: 100%;
-    padding: 0.5rem 0.75rem;
-    border-bottom: 3px solid var(--color-ink);
+    padding: 0.4375rem 0.625rem;
+    border: 0;
+    border-radius: var(--radius-sm);
     background: transparent;
     color: var(--color-ink);
     font-size: 0.875rem;
     text-align: left;
-    transition:
-      background-color 120ms linear,
-      color 120ms linear;
-  }
-
-  .combo-option:last-child {
-    border-bottom: 0;
+    transition: background-color 110ms ease;
   }
 
   .combo-option:hover,
   .combo-option[data-active="true"] {
-    background: var(--color-ink);
-    color: var(--color-inverse);
-  }
-
-  .combo-option:hover .combo-count,
-  .combo-option[data-active="true"] .combo-count {
-    color: var(--color-inverse);
-    opacity: 0.7;
+    background: var(--color-surface);
   }
 
   .combo-count {
     font-variant-numeric: tabular-nums;
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     color: var(--color-faint);
   }
 
   /* --- Section heading ------------------------------------------------- */
-  /* Uppercase rule with a black band. Not an eyebrow; it labels the block. */
+  /* A quiet label above a block. Not a black band; the content is the band. */
   .section-head {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     gap: 1rem;
-    background: var(--color-ink);
-    color: var(--color-inverse);
-    padding: 0.5rem 0.75rem;
-    font-family: var(--font-display);
-    text-transform: uppercase;
-    font-size: 0.8125rem;
-    letter-spacing: 0.04em;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-rule);
+    margin-bottom: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: -0.006em;
+    color: var(--color-ink);
+  }
+
+  /* --- Coverage track -------------------------------------------------- */
+  /* The one idea the interface spends its boldness on: a filled/empty bar
+     showing how much of what a project needs a person actually holds.
+     Rendered by CoverageTrack in components/ui.tsx. */
+  .track {
+    display: inline-flex;
+    gap: 3px;
+    height: 6px;
+  }
+
+  .track-seg {
+    width: 14px;
+    border-radius: 2px;
+    background: var(--color-rule);
+  }
+
+  .track-seg[data-filled="true"] {
+    background: currentColor;
   }
 }

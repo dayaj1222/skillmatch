@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Plus, Trash } from "@phosphor-icons/react";
 
-import { ErrorNote, SectionHead, SkillCombo, SkeletonRows } from "../components/ui";
+import { ErrorNote, NumberInput, SectionHead, Select, SkillCombo, SkeletonRows } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { Skill } from "../lib/types";
@@ -107,7 +107,7 @@ export function ProjectFormPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-[640px]">
+      <div className="mx-auto max-w-[820px]">
         <SkeletonRows rows={3} />
       </div>
     );
@@ -118,7 +118,7 @@ export function ProjectFormPage() {
   );
 
   return (
-    <div className="mx-auto max-w-[640px] space-y-6">
+    <div className="mx-auto max-w-[820px] space-y-6">
       <div>
         <h1 className="display text-[1.75rem]">
           {isEdit ? "Edit project" : "New project"}
@@ -128,7 +128,7 @@ export function ProjectFormPage() {
         </p>
       </div>
 
-      <form onSubmit={submit} className="border-3 border-rule space-y-5 p-5">
+      <form onSubmit={submit} className="block space-y-5 p-5">
         {error && <ErrorNote message={error} />}
 
         <div>
@@ -163,14 +163,13 @@ export function ProjectFormPage() {
           <label htmlFor="capacity" className="field-label">
             Team capacity
           </label>
-          <input
+          <NumberInput
             id="capacity"
-            type="number"
             min={1}
             max={50}
-            className="field-input w-[7rem]"
+            className="w-[7rem]"
             value={capacity}
-            onChange={(e) => setCapacity(Number(e.target.value))}
+            onChange={setCapacity}
           />
           <p className="field-help">
             Including you. The database refuses any acceptance past this number.
@@ -181,30 +180,31 @@ export function ProjectFormPage() {
           <SectionHead title="Required skills" meta="What you need, and at what level." />
 
           {skills.length > 0 && (
-            <ul className="mb-4 divide-y divide-rule border-x-3 border-b-3 border-rule">
+            <ul className="register mb-4 border-b border-rule">
               {skills.map((s) => (
                 <li key={s.key} className="flex items-center gap-3 px-3 py-2.5">
                   <span className="flex-1 text-[0.9375rem] text-ink">{s.name}</span>
-                  <label className="flex items-center gap-1.5 text-[0.8125rem] text-muted">
+                  <span className="flex items-center gap-1.5 text-[0.8125rem] text-muted">
                     Min level
-                    <select
-                      className="field-input h-7 w-[4.5rem] px-1.5 text-[0.8125rem]"
-                      value={s.min_level}
-                      onChange={(e) =>
-                        setSkills((all) =>
-                          all.map((x) =>
-                            x.key === s.key ? { ...x, min_level: Number(e.target.value) } : x,
-                          ),
-                        )
-                      }
-                    >
-                      {[1, 2, 3, 4, 5].map((n) => (
-                        <option key={n} value={n}>
-                          {n}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                    <span className="w-[4.5rem]">
+                      <Select
+                        aria-label={`Minimum level for ${s.name}`}
+                        className="h-7 px-1.5 text-[0.8125rem]"
+                        value={String(s.min_level)}
+                        onChange={(v) =>
+                          setSkills((all) =>
+                            all.map((x) =>
+                              x.key === s.key ? { ...x, min_level: Number(v) } : x,
+                            ),
+                          )
+                        }
+                        options={[1, 2, 3, 4, 5].map((n) => ({
+                          value: String(n),
+                          label: String(n),
+                        }))}
+                      />
+                    </span>
+                  </span>
                   <button
                     type="button"
                     onClick={() => removeSkill(s.key)}
@@ -236,18 +236,16 @@ export function ProjectFormPage() {
               <label htmlFor="req-level" className="field-label">
                 Min level
               </label>
-              <select
+              <Select
                 id="req-level"
-                className="field-input w-[6rem]"
-                value={pendingLevel}
-                onChange={(e) => setPendingLevel(Number(e.target.value))}
-              >
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <option key={n} value={n}>
-                    {n} - {["Beginner", "Basic", "Competent", "Strong", "Expert"][n - 1]}
-                  </option>
-                ))}
-              </select>
+                className="w-[9rem]"
+                value={String(pendingLevel)}
+                onChange={(v) => setPendingLevel(Number(v))}
+                options={[1, 2, 3, 4, 5].map((n) => ({
+                  value: String(n),
+                  label: `${["Beginner", "Basic", "Competent", "Strong", "Expert"][n - 1]} (${n})`,
+                }))}
+              />
             </div>
             <button type="button" onClick={addSkill} className="btn btn-secondary">
               <Plus size={14} weight="bold" />

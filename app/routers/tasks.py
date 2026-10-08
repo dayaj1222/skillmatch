@@ -16,21 +16,13 @@ from sqlalchemy.orm import Session
 
 from ..auth import get_current_user
 from ..database import get_db
-from ..models import Membership, Project, Task, User
+from ..models import Task, User
+from ..projects_service import require_member
 from ..schemas import BoardOut, TaskIn, TaskOut, TaskUpdateIn
 
 router = APIRouter(prefix="/api/projects/{project_id}/tasks", tags=["tasks"])
 
 TODO, DOING, DONE = "TODO", "DOING", "DONE"
-
-
-def _require_member(db: Session, project_id: int, user_id: int) -> Membership:
-    if db.get(Project, project_id) is None:
-        raise HTTPException(status_code=404, detail="No such project")
-    membership = db.get(Membership, (project_id, user_id))
-    if membership is None:
-        raise HTTPException(status_code=403, detail="Only team members can do that")
-    return membership
 
 
 def _task_out(db: Session, task: Task) -> TaskOut:
@@ -65,7 +57,7 @@ def get_board(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> BoardOut:
-    _require_member(db, project_id, user.id)
+    require_member(db, project_id, user.id)
     board = BoardOut()
     tasks = db.scalars(
         select(Task).where(Task.project_id == project_id).order_by(Task.position, Task.id)
@@ -82,7 +74,7 @@ def create_task(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> TaskOut:
-    _require_member(db, project_id, user.id)
+    require_member(db, project_id, user.id)
     task = Task(
         project_id=project_id,
         title=payload.title,
@@ -110,7 +102,7 @@ def update_task(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> TaskOut:
-    _require_member(db, project_id, user.id)
+    require_member(db, project_id, user.id)
     task = db.get(Task, task_id)
     if task is None or task.project_id != project_id:
         raise HTTPException(status_code=404, detail="No such task")
@@ -145,7 +137,7 @@ def delete_task(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> None:
-    _require_member(db, project_id, user.id)
+    require_member(db, project_id, user.id)
     task = db.get(Task, task_id)
     if task is None or task.project_id != project_id:
         raise HTTPException(status_code=404, detail="No such task")

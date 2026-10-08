@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from .. import applications_service as applications
 from ..auth import get_current_user
 from ..database import get_db
 from ..models import (
@@ -26,6 +27,7 @@ from ..models import (
     User,
     UserSkill,
 )
+from ..projects_service import visible_project_ids
 from ..schemas import (
     ActivityOut,
     DashboardOut,
@@ -56,16 +58,6 @@ def _activity_out(db: Session, row: Activity) -> ActivityOut:
     )
 
 
-def _visible_project_ids(db: Session, user_id: int) -> list[int]:
-    """Projects the user can see: led, on the team, or applied to."""
-    ids: set[int] = set(db.scalars(select(Project.id).where(Project.owner_id == user_id)).all())
-    ids.update(db.scalars(select(Membership.project_id).where(Membership.user_id == user_id)).all())
-    ids.update(
-        db.scalars(select(Application.project_id).where(Application.applicant_id == user_id)).all()
-    )
-    return list(ids)
-
-
 @router.get("/activity", response_model=list[ActivityOut])
 def activity_feed(
     limit: int = 30,
@@ -77,7 +69,7 @@ def activity_feed(
     An event is visible when the user is involved in it: they acted, they are the
     subject, or it happened on a project they lead, joined, or applied to.
     """
-    project_ids = _visible_project_ids(db, user.id)
+    project_ids = visible_project_ids(db, user.id)
     conditions = [Activity.actor_id == user.id, Activity.subject_user_id == user.id]
     if project_ids:
         conditions.append(Activity.project_id.in_(project_ids))
@@ -185,7 +177,11 @@ def _stats(db: Session, user: User) -> StatsOut:
         or 0
     )
     endorsements = (
-        db.scalar(select(func.count()).select_from(Endorsement).where(Endorsement.user_id == user.id))
+        db.scalar(
+            select(func.count())
+            .select_from(Endorsement)
+            .where(Endorsement.user_id == user.id)
+        )
         or 0
     )
     open_assigned = (
@@ -215,10 +211,11 @@ def _stats(db: Session, user: User) -> StatsOut:
         db.scalar(select(func.count()).select_from(UserSkill).where(UserSkill.user_id == user.id))
         or 0
     )
-    completeness = int((filled / 5) * 80) + (20 if skill_count >= 3 else int((skill_count / 3) * 20))
+    skill_bonus = 20 if skill_count >= 3 else int((skill_count / 3) * 20)
+    completeness = int((filled / 5) * 80) + skill_bonus
 
     since = datetime.now(UTC) - timedelta(days=7)
-    project_ids = _visible_project_ids(db, user.id)
+    project_ids = visible_project_ids(db, user.id)
     unread_conditions = [Activity.subject_user_id == user.id]
     if project_ids:
         unread_conditions.append(Activity.project_id.in_(project_ids))
@@ -291,35 +288,8 @@ def invite(
     project = db.get(Project, project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="No such project")
-    if project.owner_id != user.id:
-        raise HTTPException(status_code=403, detail="Only the owner can invite")
 
-    target = db.scalar(select(User).where(User.username == payload.username))
-    if target is None:
-        raise HTTPException(status_code=404, detail="No such user")
-    if target.id == user.id:
-        raise HTTPException(status_code=400, detail="You lead this project")
-    if db.get(Membership, (project_id, target.id)) is not None:
-        raise HTTPException(status_code=400, detail="They are already on the team")
-
-    existing = db.scalar(
-        select(Application).where(
-            Application.project_id == project_id, Application.applicant_id == target.id
-        )
-    )
-    if existing is not None:
-        raise HTTPException(status_code=409, detail="They already have a record here")
-
-    # Stored as a PENDING application, but marked as owner-initiated so the
-    # activity trigger announces it as INVITED rather than APPLIED. The trigger
-    # owns the feed row; writing one here too would duplicate the event.
-    application = Application(
-        project_id=project_id,
-        applicant_id=target.id,
-        message=payload.message,
-        status="PENDING",
-        initiated_by="OWNER",
-    )
-    db.add(application)
-    db.commit()
+    # Stored as a PENDING, owner-initiated application so the activity trigger
+    # announces it as INVITED rather than APPLIED. The module owns the row.
+    application = applications.invite(db, project, user, payload.username, payload.message)
     return {"ok": True, "application_id": application.id}

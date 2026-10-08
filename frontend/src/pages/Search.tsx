@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { X } from "@phosphor-icons/react";
 
-import { Empty, ErrorNote, LevelTicks, SectionHead, SkeletonRows } from "../components/ui";
+import { Empty, ErrorNote, LevelTicks, SectionHead, Select, SkeletonRows } from "../components/ui";
 import { api } from "../lib/api";
 import type { PublicProfile, Skill } from "../lib/types";
 
@@ -13,6 +13,11 @@ import type { PublicProfile, Skill } from "../lib/types";
  * make that ranking legible: every result shows which required skills the
  * person has and which they are short on, at the chosen minimum level.
  */
+const LEVEL_OPTIONS = [1, 2, 3, 4, 5].map((n) => ({
+  value: String(n),
+  label: `${["Beginner", "Basic", "Competent", "Strong", "Expert"][n - 1]} (${n})`,
+}));
+
 export function SearchPage() {
   const [catalog, setCatalog] = useState<Skill[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
@@ -81,7 +86,7 @@ export function SearchPage() {
         </p>
       </div>
 
-      <div className="border-3 border-rule space-y-5 p-5">
+      <div className="panel-instrument space-y-5 p-6">
         <div>
           <label className="field-label">Required skills</label>
           <div className="flex flex-wrap items-center gap-1.5">
@@ -108,7 +113,7 @@ export function SearchPage() {
           </div>
 
           {pickerOpen && (
-            <div className="mt-2 max-h-52 overflow-y-auto border-3 border-rule bg-paper p-2">
+            <div className="combo-menu static mt-2 max-h-52 overflow-y-auto">
               {available.length === 0 ? (
                 <p className="px-1 py-2 text-[0.8125rem] text-muted">
                   No more skills to add.
@@ -123,7 +128,7 @@ export function SearchPage() {
                         toggleSkill(s.name);
                         setPickerOpen(false);
                       }}
-                      className="border-3 border-rule px-2 py-1 text-[0.8125rem] text-ink hover:bg-ink hover:text-inverse"
+                      className="rounded-sm px-2 py-1 text-[0.8125rem] text-ink hover:bg-paper"
                     >
                       {s.name}
                       <span className="tnum ml-1.5 text-[0.6875rem] text-faint">
@@ -142,18 +147,12 @@ export function SearchPage() {
             <label htmlFor="min-level" className="field-label">
               Minimum level
             </label>
-            <select
+            <Select
               id="min-level"
-              className="field-input"
-              value={minLevel}
-              onChange={(e) => setMinLevel(Number(e.target.value))}
-            >
-              {[1, 2, 3, 4, 5].map((n) => (
-                <option key={n} value={n}>
-                  {n} - {["Beginner", "Basic", "Competent", "Strong", "Expert"][n - 1]}
-                </option>
-              ))}
-            </select>
+              value={String(minLevel)}
+              onChange={(v) => setMinLevel(Number(v))}
+              options={LEVEL_OPTIONS}
+            />
           </div>
 
           <div>
@@ -212,7 +211,7 @@ export function SearchPage() {
         )}
 
         {!loading && results && results.length > 0 && (
-          <ul className="space-y-2.5">
+          <ul className="register">
             {results.map((p) => (
               <PersonRow key={p.id} person={p} required={selected} minLevel={minLevel} />
             ))}
@@ -245,46 +244,54 @@ function PersonRow({
     .filter(Boolean)
     .join(" · ");
 
+  const full = required.length > 0 && held.length === required.length;
+
   return (
-    <li className="border-3 border-rule px-5 py-4 transition-colors hover:border-rule">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <div className="flex items-baseline gap-2">
-          <Link
-            to={`/u/${person.username}`}
-            className="text-[0.9375rem] font-medium text-ink hover:text-signal"
-          >
-            {person.full_name || person.username}
-          </Link>
-          <span className="tnum text-[0.8125rem] text-faint">
-            @{person.username}
-          </span>
+    <li className="group px-5 py-5 transition-colors hover:bg-surface">
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+            <Link
+              to={`/u/${person.username}`}
+              className="display text-[1.0625rem] hover:text-signal"
+            >
+              {person.full_name || person.username}
+            </Link>
+            <span className="tnum text-[0.8125rem] text-faint">@{person.username}</span>
+          </div>
+
+          {person.headline && (
+            <p className="mt-1 max-w-[62ch] text-[0.9375rem] text-muted">{person.headline}</p>
+          )}
+
+          {meta && <p className="tnum mt-1.5 text-[0.8125rem] text-faint">{meta}</p>}
         </div>
+
         {required.length > 0 && (
-          <span
-            className={`tnum text-[0.8125rem] font-medium ${
-              held.length === required.length ? "text-active" : "text-forming"
-            }`}
-          >
-            {held.length}/{required.length} skills
-          </span>
+          <div className="shrink-0 text-right">
+            <p
+              className={`tnum display text-[1.25rem] ${
+                full ? "text-match" : "text-partial"
+              }`}
+            >
+              {held.length}/{required.length}
+            </p>
+            <p className="mt-0.5 text-[0.75rem] text-faint">
+              {full ? "Meets every requirement" : "skills covered"}
+            </p>
+          </div>
         )}
       </div>
 
-      {person.headline && (
-        <p className="mt-0.5 text-[0.875rem] text-muted">{person.headline}</p>
-      )}
-
-      {meta && <p className="tnum mt-1 text-[0.75rem] text-faint">{meta}</p>}
-
       {person.skills.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
+        <div className="mt-3.5 flex flex-wrap gap-x-4 gap-y-2">
           {person.skills.slice(0, 8).map((s) => {
             const isRequired = required.includes(s.name);
             const counts = isRequired && s.level >= minLevel;
             return (
               <span
                 key={s.skill_id}
-                className={`inline-flex items-center gap-1.5 text-[0.8125rem] ${
+                className={`inline-flex items-center gap-1.5 text-[0.875rem] ${
                   isRequired ? (counts ? "text-ink" : "text-faint") : "text-muted"
                 }`}
               >
@@ -297,8 +304,8 @@ function PersonRow({
       )}
 
       {missing.length > 0 && (
-        <p className="mt-2.5 text-[0.75rem] text-faint">
-          Short on: {missing.join(", ")}
+        <p className="mt-2.5 text-[0.8125rem] text-gap">
+          Short on {missing.join(", ")}
         </p>
       )}
     </li>

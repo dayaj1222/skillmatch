@@ -12,7 +12,7 @@ from __future__ import annotations
 from sqlalchemy import text
 
 from app.auth import hash_password
-from app.database import SessionLocal, engine, init_db
+from app.database import SessionLocal, init_db
 from app.models import (
     Application,
     Membership,
@@ -35,10 +35,18 @@ PEOPLE = [
         "branch": "CSE",
         "year": 3,
         "location": "Chennai",
-        "bio": "Built a timetabling service for the department last semester. "
-        "Comfortable with FastAPI, Postgres, and arguing about indexes.",
+        "bio": "Built a timetabling service for the department last semester. Comfortable "
+        "with FastAPI, Postgres, and arguing about indexes. Currently reading the "
+        "Postgres source for fun, which is either a hobby or a cry for help.",
         "contact_link": "https://github.com/meera",
-        "skills": [("Python", 5, 4), ("Postgres", 5, 3), ("FastAPI", 4, 2), ("Docker", 3, 1)],
+        "skills": [
+            ("Python", 5, 4),
+            ("Postgres", 5, 3),
+            ("FastAPI", 4, 2),
+            ("Database Design", 4, 2),
+            ("Docker", 3, 1),
+            ("Pytest", 4, 2),
+        ],
     },
     {
         "username": "arjun",
@@ -49,9 +57,16 @@ PEOPLE = [
         "year": 3,
         "location": "Bengaluru",
         "bio": "Two internships on design systems. I will rebuild your spacing scale "
-        "whether you ask me to or not.",
+        "whether you ask me to or not. Strong opinions on focus rings.",
         "contact_link": "https://github.com/arjun",
-        "skills": [("React", 5, 3), ("TypeScript", 4, 3), ("Figma", 4, 2), ("CSS", 5, 4)],
+        "skills": [
+            ("React", 5, 3),
+            ("TypeScript", 4, 3),
+            ("CSS", 5, 4),
+            ("Figma", 4, 2),
+            ("Accessibility", 4, 2),
+            ("Design Systems", 4, 2),
+        ],
     },
     {
         "username": "kavya",
@@ -61,22 +76,199 @@ PEOPLE = [
         "branch": "CSE",
         "year": 4,
         "location": "Kochi",
-        "bio": "Spent a summer on a log-processing pipeline. Learning to like dbt.",
+        "bio": "Spent a summer on a log-processing pipeline handling about 40 GB a day. "
+        "Learning to like dbt. Final-year project is on query optimisation.",
         "contact_link": "https://github.com/kavya",
-        "skills": [("Python", 4, 4), ("Postgres", 4, 3), ("Pandas", 4, 3)],
+        "skills": [
+            ("Python", 4, 4),
+            ("Postgres", 4, 3),
+            ("Pandas", 4, 3),
+            ("ETL", 4, 2),
+            ("SQL", 5, 4),
+            ("Data Analysis", 4, 3),
+        ],
     },
     {
         "username": "rohit",
         "email": "rohit@example.edu",
         "full_name": "Rohit Menon",
-        "headline": "Still deciding. Good at showing up.",
+        "headline": "Second year. Learning in public, shipping small things.",
         "branch": "ECE",
         "year": 2,
         "location": "Chennai",
-        "bio": "Learning web development. Looking for a project where I can take a small "
-        "piece and actually finish it.",
+        "bio": "Learning web development between labs. Looking for a project where I can "
+        "take a small piece and actually finish it. Comfortable with Git and not "
+        "much else yet, but I show up.",
         "contact_link": "https://github.com/rohit",
-        "skills": [("JavaScript", 2, 1), ("Git", 3, 2)],
+        "skills": [
+            ("JavaScript", 2, 1),
+            ("HTML", 3, 2),
+            ("Git", 3, 2),
+            ("Linux", 2, 1),
+        ],
+    },
+    {
+        "username": "priya",
+        "email": "priya@example.edu",
+        "full_name": "Priya Deshpande",
+        "headline": "ML engineer in training. Mostly PyTorch and disappointment.",
+        "branch": "CSE",
+        "year": 4,
+        "location": "Pune",
+        "bio": "Trained a small vision model for a crop-disease project with the agri "
+        "department. Comfortable reading papers and reproducing them badly before "
+        "reproducing them well.",
+        "contact_link": "https://github.com/priya",
+        "skills": [
+            ("Python", 5, 5),
+            ("PyTorch", 4, 3),
+            ("Computer Vision", 4, 2),
+            ("NumPy", 5, 4),
+            ("Statistics", 4, 3),
+            ("Machine Learning", 4, 3),
+        ],
+    },
+    {
+        "username": "daniel",
+        "email": "daniel@example.edu",
+        "full_name": "Daniel Fernandes",
+        "headline": "Infra and the unglamorous parts that keep things up.",
+        "branch": "IT",
+        "year": 4,
+        "location": "Goa",
+        "bio": "Ran the department's CI for two years. I like Terraform, boring "
+        "deployments, and dashboards that are actually green. Will absolutely "
+        "write your Dockerfile.",
+        "contact_link": "https://github.com/daniel",
+        "skills": [
+            ("Docker", 5, 3),
+            ("Kubernetes", 4, 2),
+            ("Terraform", 4, 2),
+            ("CI/CD", 5, 3),
+            ("AWS", 4, 3),
+            ("Linux", 5, 5),
+            ("Monitoring", 4, 2),
+        ],
+    },
+    {
+        "username": "aisha",
+        "email": "aisha@example.edu",
+        "full_name": "Aisha Khan",
+        "headline": "UX researcher. I ask the questions nobody wrote down.",
+        "branch": "Design",
+        "year": 3,
+        "location": "Hyderabad",
+        "bio": "Did a semester of usability testing for the library portal and found "
+        "eleven things wrong in a week. I like user interviews and turning "
+        "messy notes into decisions.",
+        "contact_link": "https://github.com/aisha",
+        "skills": [
+            ("UX Research", 5, 3),
+            ("User Interviews", 5, 3),
+            ("Figma", 4, 3),
+            ("Prototyping", 4, 2),
+            ("UI Design", 4, 2),
+            ("Technical Writing", 4, 3),
+        ],
+    },
+    {
+        "username": "vikram",
+        "email": "vikram@example.edu",
+        "full_name": "Vikram Iyer",
+        "headline": "Security-minded backend. Assumes your input is hostile.",
+        "branch": "CSE",
+        "year": 4,
+        "location": "Bengaluru",
+        "bio": "Did a CTF run and a security internship. I read auth code for fun and "
+        "will find the one endpoint you forgot to protect. Also writes Go.",
+        "contact_link": "https://github.com/vikram",
+        "skills": [
+            ("Go", 4, 3),
+            ("Application Security", 4, 3),
+            ("Authentication", 4, 2),
+            ("Penetration Testing", 3, 2),
+            ("REST APIs", 4, 4),
+            ("Postgres", 3, 3),
+        ],
+    },
+    {
+        "username": "sneha",
+        "email": "sneha@example.edu",
+        "full_name": "Sneha Reddy",
+        "headline": "Mobile developer. Two apps on the Play Store, both still alive.",
+        "branch": "IT",
+        "year": 3,
+        "location": "Hyderabad",
+        "bio": "Built a campus bus-tracking app that about 400 people actually use. "
+        "Flutter by day, fighting Gradle by night.",
+        "contact_link": "https://github.com/sneha",
+        "skills": [
+            ("Flutter", 5, 3),
+            ("Dart", 5, 3),
+            ("Android", 4, 3),
+            ("Kotlin", 3, 2),
+            ("REST APIs", 4, 3),
+        ],
+    },
+    {
+        "username": "tom",
+        "email": "tom@example.edu",
+        "full_name": "Thomas Mathew",
+        "headline": "Embedded and IoT. If it blinks, I probably wired it.",
+        "branch": "ECE",
+        "year": 4,
+        "location": "Thiruvananthapuram",
+        "bio": "Built a soil-moisture sensor network for the campus garden that has been "
+        "running for eight months. Comfortable with C, PCBs, and soldering irons.",
+        "contact_link": "https://github.com/tom",
+        "skills": [
+            ("C", 5, 5),
+            ("Embedded C", 5, 4),
+            ("IoT", 4, 3),
+            ("Raspberry Pi", 4, 3),
+            ("Arduino", 5, 4),
+            ("PCB Design", 3, 2),
+        ],
+    },
+    {
+        "username": "neha",
+        "email": "neha@example.edu",
+        "full_name": "Neha Gupta",
+        "headline": "Full-stack generalist. Ships the whole thing, tests included.",
+        "branch": "CSE",
+        "year": 3,
+        "location": "Delhi",
+        "bio": "Built and deployed three small products end to end. I care about tests "
+        "more than most people at this stage, mostly because I have been burned.",
+        "contact_link": "https://github.com/neha",
+        "skills": [
+            ("TypeScript", 5, 4),
+            ("React", 4, 3),
+            ("Node.js", 4, 3),
+            ("Postgres", 4, 3),
+            ("Integration Testing", 4, 2),
+            ("Docker", 3, 2),
+        ],
+    },
+    {
+        "username": "leo",
+        "email": "leo@example.edu",
+        "full_name": "Leo Thomas",
+        "headline": "Compilers and languages. Currently writing one, badly.",
+        "branch": "CSE",
+        "year": 4,
+        "location": "Chennai",
+        "bio": "Wrote a small Lisp interpreter over a semester and have not stopped talking "
+        "about it. Interested in type systems and the parts of programming nobody "
+        "sees.",
+        "contact_link": "https://github.com/leo",
+        "skills": [
+            ("Rust", 4, 3),
+            ("C++", 4, 4),
+            ("Python", 4, 5),
+            ("Go", 3, 2),
+            ("Debugging", 5, 5),
+        ],
     },
 ]
 
@@ -138,7 +330,6 @@ def main() -> None:
             "C#": "Language",
             "Go": "Language",
             "Rust": "Language",
-            "Kotlin": "Language",
             "Swift": "Language",
             "Ruby": "Language",
             "PHP": "Language",
@@ -178,8 +369,10 @@ def main() -> None:
             # Mobile
             "React Native": "Mobile",
             "Flutter": "Mobile",
+            "Dart": "Mobile",
             "Android": "Mobile",
             "iOS": "Mobile",
+            "Kotlin": "Mobile",
             # Data & ML
             "Pandas": "Data & ML",
             "NumPy": "Data & ML",
@@ -362,7 +555,7 @@ def main() -> None:
         db.commit()
         print(f"Seeded {len(PEOPLE)} people, 2 projects, 2 pending applications.")
         print("All accounts use password: password123")
-        print("Try: meera, arjun, kavya, rohit")
+        print("Try: " + ", ".join(p["username"] for p in PEOPLE))
     finally:
         db.close()
 

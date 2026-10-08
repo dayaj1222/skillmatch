@@ -117,3 +117,61 @@ export interface ProjectInput {
   capacity: number;
   skills: { name: string; min_level: number }[];
 }
+
+// ---- schema lab ----
+
+export interface TableStats {
+  name: string;
+  rows: number;
+}
+
+export interface SchemaConstraint {
+  table: string;
+  name: string;
+  kind: string;
+  definition: string;
+}
+
+export interface SchemaTrigger {
+  name: string;
+  table: string;
+  timing: string;
+  event: string;
+}
+
+export interface SchemaColumn {
+  name: string;
+  type: string;
+  nullable: boolean;
+  is_primary_key: boolean;
+  is_foreign_key: boolean;
+  references: string | null;
+}
+
+export interface SchemaNode {
+  name: string;
+  rows: number;
+  columns: SchemaColumn[];
+}
+
+export interface SchemaEdge {
+  name: string;
+  source_table: string;
+  source_column: string;
+  target_table: string;
+  target_column: string;
+}
+
+export interface SchemaGraph {
+  nodes: SchemaNode[];
+  edges: SchemaEdge[];
+}
+
+export interface SchemaOverview {
+  tables: TableStats[];
+  constraints: SchemaConstraint[];
+  triggers: SchemaTrigger[];
+  indexes: number;
+  fk_count: number;
+  graph: SchemaGraph;
+}

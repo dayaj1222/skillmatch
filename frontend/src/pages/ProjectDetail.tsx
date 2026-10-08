@@ -12,6 +12,7 @@ import {
 import { UserPlus } from "@phosphor-icons/react";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { relationTo } from "../lib/relation";
 import type { Applicant, ProjectDetail } from "../lib/types";
 
 /**
@@ -49,7 +50,7 @@ export function ProjectDetailPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-[820px]">
+      <div className="mx-auto max-w-[1100px]">
         <SkeletonRows rows={4} />
       </div>
     );
@@ -57,23 +58,21 @@ export function ProjectDetailPage() {
 
   if (error || !project) {
     return (
-      <div className="mx-auto max-w-[820px]">
+      <div className="mx-auto max-w-[1100px]">
         <ErrorNote message={error ?? "Project not found"} />
       </div>
     );
   }
 
-  const isOwner = user?.id === project.owner_id;
-  const isMember = Boolean(project.my_membership);
-  const spotsLeft = project.capacity - project.member_count;
-  const pendingCount = project.applicants?.filter((a) => a.status === "PENDING").length ?? 0;
+  const rel = relationTo(project, user);
+  const { isLeader: isOwner, isMember, spotsLeft, pendingCount } = rel;
 
   return (
-    <div className="mx-auto max-w-[820px] space-y-10">
+    <div className="mx-auto max-w-[1100px] space-y-10">
       <div>
         <Link
           to="/projects"
-          className="mb-3 inline-block text-[0.75rem] font-bold uppercase tracking-[0.06em] text-muted hover:text-ink"
+          className="mb-3 inline-block text-[0.8125rem] text-muted hover:text-ink"
         >
           All projects
         </Link>
@@ -85,7 +84,7 @@ export function ProjectDetailPage() {
               </h1>
               <StatusChip status={project.status} />
             </div>
-            <p className="tnum mt-2 text-[0.75rem] uppercase tracking-[0.06em] text-muted">
+            <p className="tnum mt-2 text-[0.8125rem] text-muted">
               led by{" "}
               <Link to={`/u/${project.owner_username}`} className="underline hover:text-ink">
                 @{project.owner_username}
@@ -98,7 +97,7 @@ export function ProjectDetailPage() {
             <p className="tnum display text-[2rem] leading-none">
               {project.member_count}/{project.capacity}
             </p>
-            <p className="tnum mt-1 text-[0.6875rem] uppercase tracking-[0.06em] text-muted">
+            <p className="tnum mt-1 text-[0.8125rem] text-muted">
               {project.status === "CLOSED"
                 ? "closed"
                 : `${spotsLeft} ${spotsLeft === 1 ? "spot" : "spots"} left`}
@@ -116,14 +115,14 @@ export function ProjectDetailPage() {
       {project.required_skills.length > 0 && (
         <div>
           <SectionHead title="Needs" meta="minimum level shown" />
-          <ul className="border-x-3 border-b-3 border-rule">
+          <ul className="register border-b border-rule">
             {project.required_skills.map((s) => (
               <li
                 key={s.skill_id}
-                className="flex items-center justify-between border-b-3 border-rule px-4 py-3 last:border-b-0"
+                className="flex items-center justify-between px-4 py-3"
               >
                 <span className="text-[0.9375rem] font-medium">{s.name}</span>
-                <span className="tnum text-[0.8125rem] font-bold uppercase tracking-[0.04em]">
+                <span className="tnum text-[0.8125rem] text-muted">
                   Level {s.min_level}+
                 </span>
               </li>
@@ -132,9 +131,7 @@ export function ProjectDetailPage() {
         </div>
       )}
 
-      {user && !isOwner && !isMember && !project.my_application && project.status !== "CLOSED" && (
-        <ApplyForm projectId={projectId} onApplied={load} />
-      )}
+      {rel.canApply && <ApplyForm projectId={projectId} onApplied={load} />}
 
       {project.my_application && !isMember && project.my_application.status === "PENDING" && (
         <Invitation
@@ -145,16 +142,16 @@ export function ProjectDetailPage() {
       )}
 
       {project.my_application && !isMember && project.my_application.status !== "PENDING" && (
-        <div className="border-3 border-rule p-5">
+        <div className="block p-5">
           <p className="text-[0.875rem]">
             Your {project.my_application.initiated_by === "OWNER" ? "invitation" : "application"}{" "}
-            is <strong className="uppercase">{project.my_application.status}</strong>.
+            is <strong className="font-semibold">{project.my_application.status.toLowerCase()}</strong>.
           </p>
         </div>
       )}
 
       {!user && (
-        <div className="border-3 border-rule p-5">
+        <div className="block p-5">
           <p className="text-[0.875rem] text-muted">
             <Link to="/login" className="font-bold underline hover:text-ink">
               Sign in
@@ -164,7 +161,7 @@ export function ProjectDetailPage() {
         </div>
       )}
 
-      {isOwner && project.applicants && (
+      {rel.canSeeApplicants && project.applicants && (
         <div>
           <SectionHead
             title="Applicants"
@@ -175,14 +172,14 @@ export function ProjectDetailPage() {
             }
           />
           {project.applicants.length === 0 ? (
-            <div className="border-x-3 border-b-3 border-rule p-6">
-              <p className="display text-sm">No applications yet</p>
+            <div className="block p-6">
+              <p className="display text-base">No applications yet</p>
               <p className="mt-2 max-w-[58ch] text-sm text-muted">
                 Nobody has asked to join. Clearer required skills tend to help.
               </p>
             </div>
           ) : (
-            <ul className="border-x-3 border-b-3 border-rule">
+            <ul className="register border-b border-rule">
               {project.applicants.map((a) => (
                 <li key={a.application_id}>
                   <ApplicantRow applicant={a} projectId={projectId} onDecided={load} />
@@ -195,11 +192,11 @@ export function ProjectDetailPage() {
 
       <div>
         <SectionHead title="Team" meta={isMember ? "you are on this team" : undefined} />
-        <ul className="border-x-3 border-b-3 border-rule">
+        <ul className="register border-b border-rule">
           {project.members.map((m) => (
             <li
               key={m.user_id}
-              className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b-3 border-rule px-4 py-3 last:border-b-0"
+              className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3"
             >
               <div className="flex items-center gap-2.5">
                 <Link
@@ -208,11 +205,11 @@ export function ProjectDetailPage() {
                 >
                   {m.username}
                 </Link>
-                <span className="chip text-ink">{m.role === "LEADER" ? "Leader" : "Member"}</span>
+                <span className="chip text-muted">{m.role === "LEADER" ? "Leader" : "Member"}</span>
               </div>
 
               <div className="flex items-center gap-3">
-                <span className="tnum text-[0.6875rem] uppercase tracking-[0.06em] text-faint">
+                <span className="tnum text-[0.8125rem] text-faint">
                   joined <TimeAgo iso={m.joined_at} />
                 </span>
                 {isOwner && m.user_id !== project.owner_id && project.status !== "CLOSED" && (
@@ -273,23 +270,23 @@ export function ProjectDetailPage() {
         {isMember && <UpdateComposer projectId={projectId} onPosted={load} />}
 
         {project.updates.length === 0 ? (
-          <div className="border-x-3 border-b-3 border-rule p-6">
+          <div className="block p-6">
             <p className="text-sm text-muted">
               {isMember ? "No updates yet. Post the first one." : "No updates posted yet."}
             </p>
           </div>
         ) : (
-          <ul className="border-x-3 border-b-3 border-rule">
+          <ul className="register border-b border-rule">
             {project.updates.map((u) => (
-              <li key={u.id} className="border-b-3 border-rule px-4 py-4 last:border-b-0">
+              <li key={u.id} className="px-4 py-4">
                 <div className="flex items-baseline justify-between gap-3">
                   <Link
                     to={`/u/${u.author_username}`}
-                    className="text-[0.75rem] font-bold uppercase tracking-[0.06em] hover:underline"
+                    className="text-[0.8125rem] font-medium hover:underline"
                   >
                     @{u.author_username}
                   </Link>
-                  <span className="tnum text-[0.6875rem] uppercase tracking-[0.06em] text-faint">
+                  <span className="tnum text-[0.8125rem] text-faint">
                     <TimeAgo iso={u.created_at} />
                   </span>
                 </div>
@@ -337,16 +334,16 @@ function Invitation({
   };
 
   return (
-    <div className="border-3 border-rule p-5">
+    <div className="block p-5">
       {error && <ErrorNote message={error} />}
       <p className="text-[0.875rem]">
         {invited ? (
           <>
-            You were <strong className="uppercase">invited</strong> to this project.
+            You were <strong className="font-semibold">invited</strong> to this project.
           </>
         ) : (
           <>
-            Your application is <strong className="uppercase">pending</strong>.
+            Your application is <strong className="font-semibold">pending</strong>.
           </>
         )}
       </p>
@@ -415,12 +412,12 @@ function InviteForm({ projectId, onInvited }: { projectId: number; onInvited: ()
   };
 
   return (
-    <form onSubmit={submit} className="mt-4 border-3 border-rule p-4">
+    <form onSubmit={submit} className="mt-4 block p-4">
       <SectionHead title="Invite someone" meta="They get a pending request" />
       <div className="mt-4 space-y-4">
         {error && <ErrorNote message={error} />}
         {sent && (
-          <p className="border-3 border-active px-3 py-2 text-sm font-medium text-active">
+          <p className="rounded-sm border border-active px-3 py-2 text-sm font-medium text-active">
             Invited @{sent}. It is waiting in their dashboard.
           </p>
         )}
@@ -480,7 +477,7 @@ function ApplyForm({ projectId, onApplied }: { projectId: number; onApplied: () 
   };
 
   return (
-    <form onSubmit={submit} className="border-3 border-rule p-5">
+    <form onSubmit={submit} className="block p-5">
       <SectionHead title="Apply to join" />
       <div className="mt-4 space-y-4">
         {error && <ErrorNote message={error} />}
@@ -533,7 +530,7 @@ function ApplicantRow({
   const decided = applicant.status !== "PENDING";
 
   return (
-    <div className="border-b-3 border-rule px-4 py-4 last:border-b-0">
+    <div className="px-4 py-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <Link
           to={`/u/${applicant.username}`}
@@ -541,7 +538,7 @@ function ApplicantRow({
         >
           {applicant.username}
         </Link>
-        <span className="tnum text-[0.6875rem] uppercase tracking-[0.06em] text-faint">
+        <span className="tnum text-[0.8125rem] text-faint">
           <TimeAgo iso={applicant.created_at} />
         </span>
       </div>
@@ -559,8 +556,8 @@ function ApplicantRow({
       )}
 
       {decided ? (
-        <p className="mt-3 text-[0.75rem] font-bold uppercase tracking-[0.06em] text-faint">
-          {applicant.status}
+        <p className="mt-3 text-[0.8125rem] capitalize text-faint">
+          {applicant.status.toLowerCase()}
         </p>
       ) : (
         <div className="mt-3 flex gap-2">
@@ -606,7 +603,7 @@ function UpdateComposer({ projectId, onPosted }: { projectId: number; onPosted: 
   };
 
   return (
-    <form onSubmit={submit} className="border-x-3 border-t-3 border-rule p-4">
+    <form onSubmit={submit} className="mb-4 block p-4">
       <label htmlFor="update-body" className="field-label">
         Post an update
       </label>

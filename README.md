@@ -159,15 +159,21 @@ restricts to full coverage.
 
 ```
 app/
-  config.py          env-driven settings
-  database.py        engine, session factory, init_db
-  models.py          the 11 tables and their constraints
-  triggers.py        PL/pgSQL for capacity and accept-creates-membership
-  auth.py            bcrypt, session cookie, current-user dependency
-  skills_service.py  vocabulary lookup, skill-set replacement
-  schemas.py         Pydantic request/response models
-  routers/           auth, profiles, skills, search, projects
-  main.py            app wiring, health, SPA fallback
+  config.py             env-driven settings
+  database.py           engine, session factory, init_db
+  models.py             the tables and their constraints
+  triggers.py           PL/pgSQL for capacity and accept-creates-membership
+  migrations.py         the ordered schema bootstrap (migrate(engine))
+  auth.py               bcrypt, session cookie, current-user dependency
+  projects_service.py   the project lifecycle: status + relationship
+  applications_service.py  the application state machine
+  skills_service.py     vocabulary, skill sets, batch profile reads
+  schemas.py            Pydantic request/response models
+  routers/              auth, profiles, skills, search, projects
+  main.py               app wiring, health, SPA fallback
+frontend/
+  src/lib/relation.ts   who the viewer is on a project, derived once
+  src/pages/Schema.tsx  the schema lab: live catalog, constraints, triggers
 tests/
   conftest.py        throwaway database per test
   test_auth.py       registration, login, sessions
@@ -175,7 +181,32 @@ tests/
   test_search.py     coverage ranking
   test_projects.py   applications, decisions, lifecycle
   test_concurrency.py  the two race tests
+  test_lifecycle_module.py  the deepened modules, via their interfaces
 ```
+
+## The modules
+
+Three modules hold rules the routers used to re-derive:
+
+- **`projects_service`** — the OPEN -> FORMING -> ACTIVE derivation and
+  `relationship_for(project, user)`, which answers "is this person the leader, a
+  member, an applicant, an invitee, or an outsider?" once. The capacity and
+  membership guards live here too, so `tasks` and `comments` share them.
+- **`applications_service`** — the PENDING -> ACCEPTED | REJECTED | WITHDRAWN
+  machine, shared by applying and inviting. The invite path no longer writes an
+  application row directly.
+- **`skills_service`** — batch profile reads (`public_profiles_for`), so a
+  search page is not one profile query per row.
+
+The database triggers remain the *invariants*; these modules are the Python
+interface over them, not a reimplementation.
+
+## The schema lab
+
+`/schema` renders the live database: row counts, constraint definitions read
+from `pg_constraint`, and installed triggers read from `pg_trigger`. Nothing is
+hardcoded, so the page cannot drift from the schema. It is the point of the
+project made visible.
 
 ## Theming
 
@@ -204,8 +235,8 @@ treatment) lives in the `@layer components` classes in the same file:
 
 ## Known gaps
 
-- No migrations — `create_all()` on startup. Add Alembic before the schema
+- No versioned migrations — `migrations.py` is an ordered, idempotent
+  bootstrap (`migrate(engine)`), not Alembic. Add Alembic before the schema
   changes under live data.
 - No rate limiting on login.
 - No email verification or password reset.
-- No frontend in this repo yet — the API is complete and documented at `/docs`.

@@ -17,10 +17,10 @@ from __future__ import annotations
 import datetime as dt
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .. import applications_service as applications
 from ..auth import get_current_user, get_current_user_optional
 from ..database import get_db
 from ..models import (
@@ -32,6 +32,15 @@ from ..models import (
     Skill,
     User,
 )
+from ..projects_service import (
+    CLOSED,
+    FORMING,
+    OPEN,
+    recompute_status,
+    relationship_for,
+    set_required_skills,
+    to_out,
+)
 from ..schemas import (
     ApplicantOut,
     ApplyIn,
@@ -40,80 +49,12 @@ from ..schemas import (
     ProjectDetailOut,
     ProjectIn,
     ProjectOut,
-    ProjectSkillOut,
     ProjectUpdateIn,
     UpdateBodyIn,
     UpdateOut,
 )
-from ..skills_service import get_or_create_skill
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
-
-OPEN, FORMING, ACTIVE, CLOSED = "OPEN", "FORMING", "ACTIVE", "CLOSED"
-
-
-def _member_count(db: Session, project_id: int) -> int:
-    return (
-        db.scalar(
-            select(func.count())
-            .select_from(Membership)
-            .where(Membership.project_id == project_id)
-        )
-        or 0
-    )
-
-
-def _required_skills(db: Session, project_id: int) -> list[ProjectSkillOut]:
-    rows = db.execute(
-        select(ProjectSkill, Skill)
-        .join(Skill, Skill.id == ProjectSkill.skill_id)
-        .where(ProjectSkill.project_id == project_id)
-        .order_by(Skill.name)
-    ).all()
-    return [
-        ProjectSkillOut(skill_id=s.id, name=s.name, min_level=ps.min_level) for ps, s in rows
-    ]
-
-
-def _recompute_status(db: Session, project: Project) -> None:
-    """Derive FORMING/ACTIVE from roster fullness; never touch CLOSED."""
-    if project.status == CLOSED:
-        return
-    count = _member_count(db, project.id)
-    if count >= project.capacity:
-        project.status = ACTIVE
-    elif count > 1:
-        project.status = FORMING
-    else:
-        project.status = OPEN
-
-
-def _project_out(db: Session, project: Project) -> ProjectOut:
-    owner = db.get(User, project.owner_id)
-    return ProjectOut(
-        id=project.id,
-        owner_id=project.owner_id,
-        owner_username=owner.username if owner else "?",
-        title=project.title,
-        description=project.description,
-        capacity=project.capacity,
-        status=project.status,
-        created_at=project.created_at,
-        member_count=_member_count(db, project.id),
-        required_skills=_required_skills(db, project.id),
-    )
-
-
-def _set_project_skills(db: Session, project_id: int, skills: list) -> None:
-    db.execute(ProjectSkill.__table__.delete().where(ProjectSkill.project_id == project_id))
-    seen: set[int] = set()
-    for entry in skills:
-        skill = get_or_create_skill(db, entry.name)
-        if skill.id in seen:
-            continue
-        seen.add(skill.id)
-        db.add(ProjectSkill(project_id=project_id, skill_id=skill.id, min_level=entry.min_level))
-    db.flush()
 
 
 @router.get("", response_model=list[ProjectOut])
@@ -139,7 +80,7 @@ def list_projects(
     projects = db.scalars(
         stmt.order_by(Project.created_at.desc()).limit(limit).offset(offset)
     ).all()
-    return [_project_out(db, p) for p in projects]
+    return [to_out(db, p) for p in projects]
 
 
 @router.post("", response_model=ProjectDetailOut, status_code=status.HTTP_201_CREATED)
@@ -157,11 +98,11 @@ def create_project(
     )
     db.add(project)
     db.flush()
-    _set_project_skills(db, project.id, payload.skills)
+    set_required_skills(db, project.id, payload.skills)
     # The poster is the leader; the partial unique index guarantees only one.
     db.add(Membership(project_id=project.id, user_id=user.id, role="LEADER"))
     db.flush()
-    _recompute_status(db, project)
+    recompute_status(db, project)
     db.commit()
     db.refresh(project)
     return project_detail(project.id, user, db)
@@ -177,8 +118,8 @@ def project_detail(
     if project is None:
         raise HTTPException(status_code=404, detail="No such project")
 
-    base = _project_out(db, project)
-    is_owner = user is not None and user.id == project.owner_id
+    base = to_out(db, project)
+    relationship = relationship_for(db, project, user)
 
     members_rows = db.execute(
         select(Membership, User)
@@ -209,7 +150,7 @@ def project_detail(
         )
 
     applicants: list[ApplicantOut] | None = None
-    if is_owner:
+    if relationship.can_see_applicants:
         rows = db.execute(
             select(Application, User)
             .join(User, User.id == Application.applicant_id)
@@ -285,12 +226,12 @@ def update_project(
     for field, value in data.items():
         setattr(project, field, value)
     if skills_given:
-        _set_project_skills(db, project_id, payload.skills or [])
+        set_required_skills(db, project_id, payload.skills or [])
     db.flush()
-    _recompute_status(db, project)
+    recompute_status(db, project)
     db.commit()
     db.refresh(project)
-    return _project_out(db, project)
+    return to_out(db, project)
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -325,33 +266,8 @@ def apply_to_project(
     project = db.get(Project, project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="No such project")
-    if project.status == CLOSED:
-        raise HTTPException(status_code=400, detail="This project is closed")
-    if project.owner_id == user.id:
-        raise HTTPException(status_code=400, detail="You already lead this project")
-    if db.get(Membership, (project_id, user.id)) is not None:
-        raise HTTPException(status_code=400, detail="You are already on this team")
-
-    application = Application(
-        project_id=project_id, applicant_id=user.id, message=payload.message, status="PENDING"
-    )
-    db.add(application)
-    try:
-        db.commit()
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=409, detail="You have already applied to this project"
-        ) from exc
-    db.refresh(application)
-    return ApplicantOut(
-        application_id=application.id,
-        user_id=user.id,
-        username=user.username,
-        message=application.message,
-        status=application.status,
-        created_at=application.created_at,
-    )
+    application = applications.apply(db, project, user, payload.message)
+    return applications.to_out(application, user.username)
 
 
 @router.delete("/{project_id}/apply", status_code=status.HTTP_204_NO_CONTENT)
@@ -360,18 +276,7 @@ def withdraw_application(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> None:
-    application = db.scalar(
-        select(Application).where(
-            Application.project_id == project_id, Application.applicant_id == user.id
-        )
-    )
-    if application is None:
-        raise HTTPException(status_code=404, detail="You have not applied")
-    if application.status != "PENDING":
-        raise HTTPException(status_code=400, detail="Only a pending application can be withdrawn")
-    application.status = "WITHDRAWN"
-    application.decided_at = dt.datetime.now(dt.UTC)
-    db.commit()
+    applications.withdraw(db, project_id, user)
 
 
 @router.post("/{project_id}/applications/{application_id}/decide", response_model=ApplicantOut)
@@ -382,53 +287,10 @@ def decide_application(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ApplicantOut:
-    project = db.get(Project, project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail="No such project")
-
-    application = db.get(Application, application_id)
-    if application is None or application.project_id != project_id:
-        raise HTTPException(status_code=404, detail="No such application")
-
-    is_owner = project.owner_id == user.id
-    # The invitee may answer their own invite, but only accept or decline it;
-    # they cannot decide other people, and they cannot act on a normal
-    # application they submitted themselves (that is the owner's call).
-    is_invitee = (
-        application.applicant_id == user.id and application.initiated_by == "OWNER"
-    )
-    if not is_owner and not is_invitee:
-        raise HTTPException(status_code=403, detail="Only the owner can decide")
-    if is_invitee and not is_owner and payload.status not in ("ACCEPTED", "REJECTED"):
-        raise HTTPException(status_code=400, detail="You can only accept or decline")
-    if application.status != "PENDING":
-        raise HTTPException(status_code=400, detail=f"Already {application.status.lower()}")
-
-    application.status = payload.status
-    application.decided_at = dt.datetime.now(dt.UTC)
-    application.decided_by = user.id
-    try:
-        # The trigger creates the membership on ACCEPT and enforces capacity,
-        # raising a check_violation if the team is already full.
-        db.flush()
-        _recompute_status(db, project)
-        db.commit()
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=409, detail="That decision would exceed the team's capacity"
-        ) from exc
-
+    project, application = applications.load_for_decide(db, project_id, application_id)
+    applications.decide(db, project, application, user, payload.status)
     applicant = db.get(User, application.applicant_id)
-    return ApplicantOut(
-        application_id=application.id,
-        user_id=application.applicant_id,
-        username=applicant.username if applicant else "?",
-        message=application.message,
-        status=application.status,
-        initiated_by=application.initiated_by,
-        created_at=application.created_at,
-    )
+    return applications.to_out(application, applicant.username if applicant else "?")
 
 
 # ---------- team ----------
@@ -453,7 +315,7 @@ def leave_project(
         )
     db.delete(membership)
     db.flush()
-    _recompute_status(db, project)
+    recompute_status(db, project)
     db.commit()
 
 
@@ -509,7 +371,7 @@ def close_project(
     project.closed_at = dt.datetime.now(dt.UTC)
     db.commit()
     db.refresh(project)
-    return _project_out(db, project)
+    return to_out(db, project)
 
 
 # ---------- updates ----------

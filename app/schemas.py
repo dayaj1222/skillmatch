@@ -349,9 +349,42 @@ class TriggerOut(BaseModel):
     event: str
 
 
+class ColumnOut(BaseModel):
+    name: str
+    type: str
+    nullable: bool
+    is_primary_key: bool
+    is_foreign_key: bool
+    references: str | None = None  # "table.column" the FK points at
+
+
+class ForeignKeyEdge(BaseModel):
+    """One FK relationship, as an edge the graph can draw."""
+
+    name: str
+    source_table: str
+    source_column: str
+    target_table: str
+    target_column: str
+
+
+class TableNodeOut(BaseModel):
+    name: str
+    rows: int
+    columns: list[ColumnOut] = Field(default_factory=list)
+
+
+class SchemaGraphOut(BaseModel):
+    """The relational graph: nodes are tables, edges are foreign keys."""
+
+    nodes: list[TableNodeOut]
+    edges: list[ForeignKeyEdge]
+
+
 class SchemaOut(BaseModel):
     tables: list[TableStatsOut]
     constraints: list[ConstraintOut]
     triggers: list[TriggerOut]
     indexes: int
     fk_count: int
+    graph: SchemaGraphOut

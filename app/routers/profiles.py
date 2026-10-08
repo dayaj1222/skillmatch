@@ -16,33 +16,18 @@ from ..schemas import (
     PublicProfileOut,
     SkillSetIn,
 )
-from ..skills_service import endorsement_counts_for, replace_user_skills
+from ..skills_service import (
+    profile_skills_for,
+    public_profiles_for,
+    replace_user_skills,
+)
 
 router = APIRouter(prefix="/api", tags=["profiles"])
 
 
 def _profile_skills(db: Session, user_id: int) -> list[ProfileSkillOut]:
     """A person's skills with category and endorsement count, best first."""
-    counts = endorsement_counts_for(db, user_id)
-    rows = db.execute(
-        select(UserSkill, Skill)
-        .join(Skill, Skill.id == UserSkill.skill_id)
-        .where(UserSkill.user_id == user_id)
-        .order_by(UserSkill.level.desc(), Skill.name)
-    ).all()
-    out: list[ProfileSkillOut] = []
-    for us, skill in rows:
-        out.append(
-            ProfileSkillOut(
-                skill_id=skill.id,
-                name=skill.name,
-                category=skill.category.name if skill.category else None,
-                level=us.level,
-                years=us.years,
-                endorsements=counts.get(skill.id, 0),
-            )
-        )
-    return out
+    return profile_skills_for(db, user_id)
 
 
 @router.get("/profile", response_model=ProfileOut)
@@ -88,19 +73,7 @@ def public_profile(username: str, db: Session = Depends(get_db)) -> PublicProfil
     user = db.scalar(select(User).where(User.username == username))
     if user is None:
         raise HTTPException(status_code=404, detail="No such user")
-    profile = db.get(Profile, user.id)
-    return PublicProfileOut(
-        id=user.id,
-        username=user.username,
-        full_name=profile.full_name if profile else None,
-        headline=profile.headline if profile else None,
-        branch=profile.branch if profile else None,
-        year=profile.year if profile else None,
-        location=profile.location if profile else None,
-        bio=profile.bio if profile else None,
-        contact_link=profile.contact_link if profile else None,
-        skills=_profile_skills(db, user.id),
-    )
+    return public_profiles_for(db, [user.id])[user.id]
 
 
 @router.post("/profile/{username}/endorse/{skill_id}", status_code=status.HTTP_201_CREATED)
@@ -166,12 +139,9 @@ def people(
             User.id.in_(select(UserSkill.user_id).where(UserSkill.skill_id.in_(skill_ids)))
         )
     if q:
-        like = f"%{q}%"
-        stmt = stmt.join(Profile, Profile.user_id == User.id).where(
-            Profile.full_name.ilike(like)
-            | Profile.headline.ilike(like)
-            | Profile.bio.ilike(like)
-            | User.username.ilike(like)
-        )
+        from .search import _free_text_filter  # one definition of the match
+
+        stmt = stmt.join(Profile, Profile.user_id == User.id).where(_free_text_filter(q))
     users = db.scalars(stmt.order_by(User.username).limit(limit).offset(offset)).all()
-    return [public_profile(u.username, db) for u in users]
+    profiles = public_profiles_for(db, [u.id for u in users])
+    return [profiles[u.id] for u in users if u.id in profiles]

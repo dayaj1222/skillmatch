@@ -15,6 +15,7 @@ import type {
   ProjectInput,
   ProjectUpdate,
   PublicProfile,
+  SchemaOverview,
   Skill,
   SkillCategory,
   User,
@@ -130,6 +131,9 @@ export const api = {
   // ---- skills ----
   skills: () => request<Skill[]>("/api/skills"),
   categories: () => request<SkillCategory[]>("/api/skills/categories"),
+
+  // ---- schema lab ----
+  schema: () => request<SchemaOverview>("/api/schema"),
 
   // ---- search + directory ----
   search: (params: {

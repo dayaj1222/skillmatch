@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from .config import get_settings
@@ -41,43 +41,11 @@ def get_db() -> Iterator[Session]:
 
 
 def init_db() -> None:
-    """Create extensions and all tables. Idempotent."""
-    with engine.begin() as conn:
-        # citext gives us case-insensitive skill-name uniqueness at the DB level.
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS citext"))
-        # pg_trgm powers fast fuzzy/prefix search on names and titles.
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
-    # Import models so they register on Base.metadata before create_all.
-    from . import models  # noqa: F401
+    """Bring the database up to date. Idempotent.
 
-    Base.metadata.create_all(bind=engine)
+    The ordered steps live in ``migrations.py``; this is the one interface the
+    app calls. Kept as a wrapper so existing callers do not change.
+    """
+    from .migrations import migrate
 
-    # create_all() only creates *missing* tables; it never alters an existing
-    # one. This one column was added after the first release, so bring older
-    # databases forward explicitly. Idempotent: safe to run on every boot.
-    with engine.begin() as conn:
-        conn.execute(
-            text(
-                "ALTER TABLE applications "
-                "ADD COLUMN IF NOT EXISTS initiated_by varchar(9) "
-                "NOT NULL DEFAULT 'APPLICANT'"
-            )
-        )
-        # ADD CONSTRAINT has no IF NOT EXISTS in Postgres; check the catalog.
-        conn.execute(
-            text(
-                "DO $$ BEGIN "
-                "IF NOT EXISTS (SELECT 1 FROM pg_constraint "
-                "WHERE conname = 'ck_application_initiated_by') THEN "
-                "ALTER TABLE applications ADD CONSTRAINT ck_application_initiated_by "
-                "CHECK (initiated_by IN ('APPLICANT','OWNER')); "
-                "END IF; END $$;"
-            )
-        )
-
-    # Triggers for the invariants constraints cannot express (capacity ceiling,
-    # accept-creates-membership). Imported here to avoid a circular import at
-    # module load time.
-    from .triggers import install_triggers
-
-    install_triggers()
+    migrate(engine)

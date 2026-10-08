@@ -20,3 +20,6 @@ pgdata/
 
 # Frontend build tooling
 frontend/node_modules/
+
+# Pi agent task logs
+.pi/

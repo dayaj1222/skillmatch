@@ -6,8 +6,10 @@ import { useAuth } from "../lib/auth";
 /**
  * App shell.
  *
- * Navigation is one ruled bar, uppercase, never wraps: it stays on a single
- * line at every width rather than stacking.
+ * Navigation is one quiet bar, sentence case, never wraps: it stays on a
+ * single line at every width rather than stacking. The active item is marked
+ * with an underline in the signal colour, not a filled block — the bar should
+ * recede so the content carries the page.
  */
 export function AppShell() {
   const { user, logout } = useAuth();
@@ -20,28 +22,51 @@ export function AppShell() {
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     [
-      "px-2.5 py-1 text-[0.75rem] font-bold uppercase tracking-[0.06em] transition-colors",
-      isActive ? "bg-ink text-inverse" : "text-muted hover:bg-ink hover:text-inverse",
+      "relative px-3 py-1.5 text-[0.875rem] font-medium transition-colors",
+      isActive ? "text-ink" : "text-muted hover:text-ink",
     ].join(" ");
 
   return (
     <div className="min-h-[100dvh] bg-paper text-ink">
-      <header className="sticky top-0 z-30 border-b-3 border-rule bg-paper">
-        <div className="mx-auto flex h-[60px] max-w-[1180px] items-center gap-2 px-4 sm:px-6">
-          <NavLink to="/" className="mr-4">
-            <span className="display text-[1.0625rem]">Skillmatch</span>
+      <header className="sticky top-0 z-30 border-b border-rule bg-paper/85 backdrop-blur-sm">
+        <div className="mx-auto flex h-[60px] max-w-[1600px] items-center gap-2 px-4 sm:px-8">
+          <NavLink to="/" className="mr-5 flex items-baseline gap-1.5">
+            <span className="display text-[1.1875rem]">SkillMatch</span>
           </NavLink>
 
-          <nav className="flex flex-1 items-center gap-1">
+          <nav className="flex flex-1 items-center gap-0.5">
             <NavLink to="/search" className={linkClass}>
-              Find people
+              {({ isActive }) => (
+                <>
+                  Find people
+                  {isActive && <NavUnderline />}
+                </>
+              )}
             </NavLink>
             <NavLink to="/projects" className={linkClass}>
-              Projects
+              {({ isActive }) => (
+                <>
+                  Projects
+                  {isActive && <NavUnderline />}
+                </>
+              )}
+            </NavLink>
+            <NavLink to="/schema" className={linkClass}>
+              {({ isActive }) => (
+                <>
+                  Schema
+                  {isActive && <NavUnderline />}
+                </>
+              )}
             </NavLink>
             {user && (
               <NavLink to={`/u/${user.username}`} className={linkClass}>
-                {user.username}
+                {({ isActive }) => (
+                  <>
+                    {user.username}
+                    {isActive && <NavUnderline />}
+                  </>
+                )}
               </NavLink>
             )}
           </nav>
@@ -76,15 +101,22 @@ export function AppShell() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1180px] px-4 py-10 sm:px-6">
+      <main className="mx-auto max-w-[1600px] px-4 py-10 sm:px-8">
         <Outlet />
       </main>
 
-      <footer className="mx-auto max-w-[1180px] px-4 pb-12 pt-6 sm:px-6">
-        <p className="border-t-3 border-rule pt-4 text-[0.75rem] uppercase tracking-[0.06em] text-faint">
-          SkillMatch. A database-systems project: the schema enforces the rules.
+      <footer className="mx-auto max-w-[1600px] px-4 pb-12 pt-6 sm:px-8">
+        <p className="border-t border-rule pt-5 text-[0.8125rem] text-faint">
+          SkillMatch — a team-finder for small projects.
         </p>
       </footer>
     </div>
+  );
+}
+
+/** The active-tab marker: a short rule sitting on the bar's baseline. */
+function NavUnderline() {
+  return (
+    <span className="pointer-events-none absolute inset-x-3 -bottom-[13px] h-0.5 rounded-full bg-signal" />
   );
 }

@@ -114,4 +114,5 @@ def test_task_on_wrong_project_is_404(client, register):
         "/api/projects", json={**PROJECT, "title": "second"}
     ).json()["id"]
     tid = client.post(f"/api/projects/{pid_a}/tasks", json={"title": "x"}).json()["id"]
-    assert client.patch(f"/api/projects/{pid_b}/tasks/{tid}", json={"status": "DONE"}).status_code == 404
+    r = client.patch(f"/api/projects/{pid_b}/tasks/{tid}", json={"status": "DONE"})
+    assert r.status_code == 404
