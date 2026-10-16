@@ -78,6 +78,11 @@ export function ProjectFormPage() {
     setPendingLevel(3);
   };
 
+  const addCatalogSkill = (name: string) => {
+    if (skills.some((s) => s.name.toLowerCase() === name.toLowerCase())) return;
+    setSkills((s) => [...s, { key: Date.now() + s.length, name, min_level: pendingLevel }]);
+  };
+
   const removeSkill = (key: number) => setSkills((s) => s.filter((x) => x.key !== key));
 
   const submit = async (e: React.FormEvent) => {
@@ -178,6 +183,25 @@ export function ProjectFormPage() {
 
         <div className="border-t border-rule pt-5">
           <SectionHead title="Required skills" meta="What you need, and at what level." />
+
+          {unused.length > 0 && (
+            <div className="mb-4">
+              <p className="field-label">Quick add from the catalog</p>
+              <div className="flex flex-wrap gap-2">
+                {unused.slice(0, 10).map((skill) => (
+                  <button
+                    key={skill.id}
+                    type="button"
+                    className="chip"
+                    onClick={() => addCatalogSkill(skill.name)}
+                  >
+                    + {skill.name}
+                  </button>
+                ))}
+              </div>
+              <p className="field-help">Set the minimum level once, then add several skills quickly.</p>
+            </div>
+          )}
 
           {skills.length > 0 && (
             <ul className="register mb-4 border-b border-rule">
