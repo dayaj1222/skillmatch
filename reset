@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "This will replace the local SkillMatch demo data with its initial seed."
+echo "Users, profiles, skills, projects, memberships, applications, and updates will be reset."
+read -r -p "Continue? [y/N] " confirmation
+if [[ ! "$confirmation" =~ ^[Yy]$ ]]; then
+  echo "Reset cancelled."
+  exit 0
+fi
+
+cd "$ROOT_DIR"
+uv run python seed.py

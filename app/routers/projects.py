@@ -374,6 +374,26 @@ def close_project(
     return to_out(db, project)
 
 
+@router.post("/{project_id}/reopen", response_model=ProjectOut)
+def reopen_project(
+    project_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ProjectOut:
+    """Reopen an owner's project and derive its recruiting status from its roster."""
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="No such project")
+    if project.owner_id != user.id:
+        raise HTTPException(status_code=403, detail="Only the owner can reopen this project")
+    project.status = OPEN
+    project.closed_at = None
+    recompute_status(db, project)
+    db.commit()
+    db.refresh(project)
+    return to_out(db, project)
+
+
 # ---------- updates ----------
 
 

@@ -186,6 +186,8 @@ export const api = {
 
   close: (id: number) => request<Project>(`/api/projects/${id}/close`, { method: "POST" }),
 
+  reopen: (id: number) => request<Project>(`/api/projects/${id}/reopen`, { method: "POST" }),
+
   invite: (id: number, username: string, message: string) =>
     request<{ ok: boolean; application_id: number }>(`/api/projects/${id}/invite`, {
       method: "POST",

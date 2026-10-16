@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { LockOpen, LockSimple, Trash } from "@phosphor-icons/react";
 
 import { Empty, ErrorNote, SectionHead, Select, SkeletonRows, StatusChip } from "../components/ui";
 import { api } from "../lib/api";
@@ -20,6 +21,7 @@ export function ProjectsPage() {
 
   const [catalog, setCatalog] = useState<Skill[]>([]);
   const [projects, setProjects] = useState<Project[] | null>(null);
+  const [closedProjects, setClosedProjects] = useState<Project[]>([]);
   const [openOnly, setOpenOnly] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,15 +36,18 @@ export function ProjectsPage() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    api
-      .projects({
+    Promise.all([
+      api.projects({
         skill: activeSkill ? [activeSkill] : undefined,
         open_only: openOnly,
         limit: 50,
-      })
-      .then((r) => {
+      }),
+      user ? api.projects({ open_only: false, limit: 100 }) : Promise.resolve([]),
+    ])
+      .then(([r, allProjects]) => {
         if (!cancelled) {
           setProjects(r);
+          setClosedProjects(allProjects.filter((p) => p.owner_username === user?.username && p.status === "CLOSED"));
           setError(null);
         }
       })
@@ -55,7 +60,28 @@ export function ProjectsPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeSkill, openOnly]);
+  }, [activeSkill, openOnly, user?.username]);
+
+  const handleProjectUpdate = (updated: Project) => {
+    if (updated.status === "CLOSED") {
+      setProjects((all) => all?.filter((item) => item.id !== updated.id) ?? []);
+      setClosedProjects((all) => [updated, ...all.filter((item) => item.id !== updated.id)]);
+      return;
+    }
+    setClosedProjects((all) => all.filter((item) => item.id !== updated.id));
+    const matchesSkill = !activeSkill || updated.required_skills.some((s) => s.name === activeSkill);
+    const matchesOpenFilter = !openOnly || updated.status === "OPEN" || updated.status === "FORMING";
+    if (matchesSkill && matchesOpenFilter) {
+      setProjects((all) => all?.some((item) => item.id === updated.id)
+        ? all.map((item) => item.id === updated.id ? updated : item)
+        : [updated, ...(all ?? [])]);
+    }
+  };
+
+  const handleProjectDelete = (deletedId: number) => {
+    setProjects((all) => all?.filter((item) => item.id !== deletedId) ?? []);
+    setClosedProjects((all) => all.filter((item) => item.id !== deletedId));
+  };
 
   return (
     <div className="space-y-8">
@@ -144,65 +170,152 @@ export function ProjectsPage() {
           <ul className="border-t border-rule">
             {projects.map((p) => (
               <li key={p.id}>
-                <ProjectRow project={p} />
+                <ProjectRow
+                  project={p}
+                  isOwner={user?.username === p.owner_username}
+                  onUpdate={handleProjectUpdate}
+                  onDelete={handleProjectDelete}
+                />
               </li>
             ))}
           </ul>
         </div>
       )}
+
+      {user && !loading && (
+        <section>
+          <SectionHead title="Your closed projects" meta={`${closedProjects.length} ${closedProjects.length === 1 ? "project" : "projects"}`} />
+          {closedProjects.length === 0 ? (
+            <p className="py-4 text-sm text-muted">Projects you close will appear here. You can reopen or delete them anytime.</p>
+          ) : (
+            <ul className="border-t border-rule">
+              {closedProjects.map((project) => (
+                <li key={project.id}>
+                  <ProjectRow project={project} isOwner onUpdate={handleProjectUpdate} onDelete={handleProjectDelete} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
     </div>
   );
 }
 
-function ProjectRow({ project }: { project: Project }) {
+function ProjectRow({
+  project,
+  isOwner,
+  onUpdate,
+  onDelete,
+}: {
+  project: Project;
+  isOwner: boolean;
+  onUpdate: (project: Project) => void;
+  onDelete: (id: number) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const spotsLeft = project.capacity - project.member_count;
   const full = spotsLeft <= 0;
 
   return (
-    <Link to={`/projects/${project.id}`} className="row px-4 py-5">
-      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="display text-[1.25rem]">{project.title}</span>
-            <StatusChip status={project.status} />
-          </div>
-          <p className="mt-1 text-[0.8125rem] text-muted">
-            Led by {project.owner_username} · started{" "}
-            {new Date(project.created_at).toLocaleDateString(undefined, {
-              month: "short",
-              day: "numeric",
-            })}
-          </p>
-          {project.description && (
-            <p className="mt-2.5 line-clamp-2 max-w-[70ch] text-[0.9375rem] text-muted">
-              {project.description}
-            </p>
-          )}
-          {project.required_skills.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {project.required_skills.map((s) => (
-                <span key={s.skill_id} className="chip text-muted">
-                  {s.name}
-                  <span className="tnum ml-1.5 text-faint">L{s.min_level}+</span>
-                </span>
-              ))}
+    <div className="row flex flex-wrap items-stretch justify-between gap-3 px-4 py-5">
+      <Link to={`/projects/${project.id}`} className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="display text-[1.25rem]">{project.title}</span>
+              <StatusChip status={project.status} />
             </div>
+            <p className="mt-1 text-[0.8125rem] text-muted">
+              Led by {project.owner_username} · started{" "}
+              {new Date(project.created_at).toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+              })}
+            </p>
+            {project.description && (
+              <p className="mt-2.5 line-clamp-2 max-w-[70ch] text-[0.9375rem] text-muted">
+                {project.description}
+              </p>
+            )}
+            {project.required_skills.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {project.required_skills.map((s) => (
+                  <span key={s.skill_id} className="chip text-muted">
+                    {s.name}
+                    <span className="tnum ml-1.5 text-faint">L{s.min_level}+</span>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="shrink-0 text-right">
+            <p className={`tnum display text-[1.5rem] ${full ? "text-muted" : "text-ink"}`}>
+              {project.member_count}/{project.capacity}
+            </p>
+            <p className="mt-1 text-[0.75rem] text-faint">
+              {project.status === "CLOSED"
+                ? "Closed"
+                : full
+                  ? "Full"
+                  : `${spotsLeft} ${spotsLeft === 1 ? "spot" : "spots"} left`}
+            </p>
+          </div>
+        </div>
+      </Link>
+      {isOwner && (
+        <div className="flex shrink-0 items-start gap-2 sm:items-center">
+          {project.status === "CLOSED" ? (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                setError(null);
+                try { onUpdate(await api.reopen(project.id)); }
+                catch (err) { setError(err instanceof Error ? err.message : "Could not reopen project"); }
+                finally { setBusy(false); }
+              }}
+            >
+              <LockOpen size={15} /> Reopen
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={busy}
+              onClick={async () => {
+                if (!window.confirm(`Close “${project.title}”? It will stop appearing in recruiting results.`)) return;
+                setBusy(true);
+                setError(null);
+                try { onUpdate(await api.close(project.id)); }
+                catch (err) { setError(err instanceof Error ? err.message : "Could not close project"); }
+                finally { setBusy(false); }
+              }}
+            >
+              <LockSimple size={15} /> Close
+            </button>
           )}
+          <button
+            type="button"
+            className="btn btn-danger"
+            disabled={busy}
+            onClick={async () => {
+              if (!window.confirm(`Permanently delete “${project.title}”? This cannot be undone.`)) return;
+              setBusy(true);
+              setError(null);
+              try { await api.deleteProject(project.id); onDelete(project.id); }
+              catch (err) { setError(err instanceof Error ? err.message : "Could not delete project"); }
+              finally { setBusy(false); }
+            }}
+          >
+            <Trash size={15} /> Delete
+          </button>
         </div>
-
-        <div className="shrink-0 text-right">
-          <p className={`tnum display text-[1.5rem] ${full ? "text-muted" : "text-ink"}`}>
-            {project.member_count}/{project.capacity}
-          </p>
-          <p className="mt-1 text-[0.75rem] text-faint">
-            {project.status === "CLOSED"
-              ? "Closed"
-              : full
-                ? "Full"
-                : `${spotsLeft} ${spotsLeft === 1 ? "spot" : "spots"} left`}
-          </p>
-        </div>
-      </div>
-    </Link>
+      )}
+      {error && <p className="w-full text-sm text-deny" role="alert">{error}</p>}
+    </div>
   );
 }
