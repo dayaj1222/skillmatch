@@ -302,6 +302,8 @@ function ReadOnlyProfile({
   isMe: boolean;
   onChanged: () => void;
 }) {
+  const [skillModalOpen, setSkillModalOpen] = useState(false);
+
   return (
     <div className="space-y-8">
       {profile.bio && (
@@ -322,6 +324,12 @@ function ReadOnlyProfile({
               : "Vouch for a skill you have seen them use."
           }
         />
+        {isMe && (
+          <button type="button" onClick={() => setSkillModalOpen(true)} className="btn btn-secondary mb-4">
+            <Plus size={14} weight="bold" />
+            Add skills
+          </button>
+        )}
         {profile.skills.length === 0 ? (
           <Empty
             title={isMe ? "No skills listed yet" : "No skills listed"}
@@ -332,9 +340,9 @@ function ReadOnlyProfile({
             }
             action={
               isMe ? (
-                <Link to={`/u/${profile.username}`} className="btn btn-secondary">
+                <button type="button" onClick={() => setSkillModalOpen(true)} className="btn btn-secondary">
                   Add skills
-                </Link>
+                </button>
               ) : null
             }
           />
@@ -351,6 +359,89 @@ function ReadOnlyProfile({
             ))}
           </ul>
         )}
+      </div>
+      {isMe && skillModalOpen && (
+        <SkillPickerModal
+          current={profile.skills}
+          onClose={() => setSkillModalOpen(false)}
+          onSaved={() => {
+            setSkillModalOpen(false);
+            onChanged();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+const SKILL_GROUPS = [
+  { name: "Frontend Development", skills: ["HTML5", "CSS3", "JavaScript (ES6+)", "TypeScript", "React", "Next.js", "Vue.js", "Nuxt.js", "Angular", "Svelte", "Tailwind CSS", "Sass/SCSS", "Styled Components", "Bootstrap"] },
+  { name: "Backend Development", skills: ["Node.js/Express", "Python (FastAPI/Django)", "Java (Spring Boot)", "Go", "Rust", "C# (.NET)", "REST APIs", "GraphQL", "gRPC", "WebSockets"] },
+  { name: "Mobile Development", skills: ["Flutter", "React Native", "Expo", "Swift (iOS)", "Kotlin (Android)"] },
+  { name: "Data Science, AI & ML", skills: ["PyTorch", "TensorFlow", "OpenCV", "Scikit-Learn", "Pandas/NumPy", "Computer Vision", "NLP / LLMs", "Data Engineering", "MLOps"] },
+  { name: "Cloud & DevOps", skills: ["AWS", "Google Cloud (GCP)", "Microsoft Azure", "Docker", "Kubernetes", "Terraform", "CI/CD (GitHub Actions, GitLab CI)"] },
+  { name: "Databases & Storage", skills: ["PostgreSQL", "MySQL", "MongoDB", "Redis", "PostgreSQL (pgvector)", "Firebase"] },
+  { name: "Embedded Systems & Hardware", skills: ["ESP32", "STM32", "Arduino", "Raspberry Pi", "8051", "Embedded C/C++", "FreeRTOS", "MQTT", "UART/I2C/SPI", "TinyML"] },
+];
+
+function SkillPickerModal({
+  current,
+  onClose,
+  onSaved,
+}: {
+  current: ProfileSkill[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [genre, setGenre] = useState<string | null>(null);
+  const [selected, setSelected] = useState(() => new Set(current.map((s) => s.name)));
+  const [query, setQuery] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const toggle = (name: string) => setSelected((old) => {
+    const next = new Set(old);
+    next.has(name) ? next.delete(name) : next.add(name);
+    return next;
+  });
+  const visibleGroups = SKILL_GROUPS.map((group) => ({
+    ...group,
+    skills: group.skills.filter((s) => s.toLowerCase().includes(query.toLowerCase())),
+  })).filter((group) => !genre || group.name === genre).filter((group) => group.skills.length);
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.setSkills([...selected].map((name) => {
+        const old = current.find((s) => s.name === name);
+        return { name, level: old?.level ?? 3, years: old?.years ?? 0 };
+      }));
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save skills");
+    } finally { setSaving(false); }
+  };
+  return (
+    <div className="skill-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="skill-picker-title" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="skill-modal animate-pop">
+        <div className="flex items-start justify-between gap-4 border-b border-rule pb-4">
+          <div><p className="eyebrow">Skill library</p><h2 id="skill-picker-title" className="display text-[1.6rem]">Build your toolkit</h2></div>
+          <button type="button" className="btn btn-ghost h-8 px-2" onClick={onClose} aria-label="Close">×</button>
+        </div>
+        <input className="field-input mt-4" placeholder="Search skills" value={query} onChange={(e) => setQuery(e.target.value)} autoFocus />
+        {!genre && !query ? (
+          <div className="mt-5 grid gap-2 sm:grid-cols-2">
+            {SKILL_GROUPS.map((group) => <button key={group.name} type="button" className="genre-card" onClick={() => setGenre(group.name)}><span>{group.name}</span><small>{group.skills.length} skills</small></button>)}
+          </div>
+        ) : (
+          <>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button type="button" className={`chip ${!genre ? "chip-active" : ""}`} onClick={() => setGenre(null)}>All genres</button>
+              {SKILL_GROUPS.map((group) => <button key={group.name} type="button" className={`chip ${genre === group.name ? "chip-active" : ""}`} onClick={() => setGenre(group.name)}>{group.name}</button>)}
+            </div>
+            <div className="skill-options mt-4">{visibleGroups.flatMap((group) => group.skills.map((name) => <button key={name} type="button" className={`skill-option ${selected.has(name) ? "skill-option-selected" : ""}`} onClick={() => toggle(name)}><span>{selected.has(name) ? "✓" : "+"}</span>{name}</button>))}</div>
+          </>
+        )}
+        {error && <ErrorNote message={error} />}
+        <div className="mt-5 flex items-center justify-between border-t border-rule pt-4"><span className="text-[0.8125rem] text-muted">{selected.size} selected</span><div className="flex gap-2"><button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button><button type="button" className="btn btn-primary" disabled={saving} onClick={save}>{saving ? "Saving…" : "Save skills"}</button></div></div>
       </div>
     </div>
   );
