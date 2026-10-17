@@ -24,7 +24,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .models import Application, Membership, Project, User
-from .projects_service import CLOSED, recompute_status
+from .projects_service import ACTIVE, CLOSED, recompute_status
 from .schemas import ApplicantOut
 
 PENDING = "PENDING"
@@ -67,6 +67,8 @@ def apply(db: Session, project: Project, user: User, message: str) -> Applicatio
     """
     if project.status == CLOSED:
         raise HTTPException(status_code=400, detail="This project is closed")
+    if project.status == ACTIVE:
+        raise HTTPException(status_code=400, detail="This project is full")
     if project.owner_id == user.id:
         raise HTTPException(status_code=400, detail="You already lead this project")
     if db.get(Membership, (project.id, user.id)) is not None:
@@ -99,6 +101,10 @@ def invite(db: Session, project: Project, owner: User, username: str, message: s
     """
     if project.owner_id != owner.id:
         raise HTTPException(status_code=403, detail="Only the owner can invite")
+    if project.status == CLOSED:
+        raise HTTPException(status_code=400, detail="This project is closed")
+    if project.status == ACTIVE:
+        raise HTTPException(status_code=400, detail="This project is full")
 
     target = db.scalar(select(User).where(User.username == username))
     if target is None:

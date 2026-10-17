@@ -17,6 +17,9 @@ export interface Profile {
   location: string | null;
   bio: string | null;
   contact_link: string | null;
+  avatar_url: string | null;
+  upi_id: string | null;
+  hourly_rate: number | null;
 }
 
 export interface ProfileSkill {
@@ -38,6 +41,9 @@ export interface PublicProfile {
   location: string | null;
   bio: string | null;
   contact_link: string | null;
+  avatar_url: string | null;
+  upi_id: string | null;
+  hourly_rate: number | null;
   skills: ProfileSkill[];
 }
 

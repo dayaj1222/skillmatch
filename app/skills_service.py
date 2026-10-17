@@ -142,6 +142,13 @@ def public_profiles_for(db: Session, user_ids: list[int]) -> dict[int, PublicPro
             location=profile.location if profile else None,
             bio=profile.bio if profile else None,
             contact_link=profile.contact_link if profile else None,
+            avatar_url=profile.avatar_url if profile else None,
+            upi_id=profile.upi_id if profile else None,
+            hourly_rate=(
+                float(profile.hourly_rate)
+                if profile and profile.hourly_rate is not None
+                else None
+            ),
             skills=skills.get(user.id, []),
         )
     return out

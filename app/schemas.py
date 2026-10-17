@@ -42,6 +42,9 @@ class ProfileIn(BaseModel):
     location: str | None = Field(default=None, max_length=120)
     bio: str | None = Field(default=None, max_length=4000)
     contact_link: str | None = Field(default=None, max_length=300)
+    avatar_url: str | None = Field(default=None, max_length=500)
+    upi_id: str | None = Field(default=None, max_length=100)
+    hourly_rate: float | None = Field(default=None, ge=0)
 
 
 class ProfileOut(ORMModel):
@@ -53,6 +56,9 @@ class ProfileOut(ORMModel):
     location: str | None = None
     bio: str | None = None
     contact_link: str | None = None
+    avatar_url: str | None = None
+    upi_id: str | None = None
+    hourly_rate: float | None = None
 
 
 class ProfileSkillOut(BaseModel):
@@ -74,6 +80,9 @@ class PublicProfileOut(BaseModel):
     location: str | None = None
     bio: str | None = None
     contact_link: str | None = None
+    avatar_url: str | None = None
+    upi_id: str | None = None
+    hourly_rate: float | None = None
     skills: list[ProfileSkillOut] = Field(default_factory=list)
 
 
@@ -388,3 +397,159 @@ class SchemaOut(BaseModel):
     indexes: int
     fk_count: int
     graph: SchemaGraphOut
+
+
+# ---------- connections / follows ----------
+
+
+class ConnectionRequestIn(BaseModel):
+    username: str = Field(min_length=1, max_length=40)
+
+
+class ConnectionOut(BaseModel):
+    id: int
+    requester_id: int
+    recipient_id: int
+    other_username: str
+    status: str
+    created_at: dt.datetime
+    responded_at: dt.datetime | None = None
+
+
+class ConnectionStatusOut(BaseModel):
+    status: str  # NONE / PENDING / INCOMING / CONNECTED / REJECTED / BLOCKED
+
+
+class FollowOut(BaseModel):
+    username: str
+
+
+# ---------- messages ----------
+
+
+class MessageIn(BaseModel):
+    recipient_username: str = Field(min_length=1, max_length=40)
+    body: str = Field(min_length=1, max_length=4000)
+
+
+class MessageOut(BaseModel):
+    id: int
+    sender_id: int
+    sender_username: str
+    recipient_id: int
+    recipient_username: str
+    body: str
+    created_at: dt.datetime
+    read_at: dt.datetime | None = None
+
+
+class ThreadOut(BaseModel):
+    partner_id: int
+    partner_username: str
+    last_message: MessageOut
+
+
+# ---------- payments ----------
+
+
+class TransactionIn(BaseModel):
+    payee_username: str = Field(min_length=1, max_length=40)
+    amount: float = Field(gt=0)
+    project_id: int | None = None
+    note: str | None = Field(default=None, max_length=500)
+
+
+class TransactionOut(BaseModel):
+    id: int
+    project_id: int | None = None
+    payer_id: int
+    payer_username: str
+    payee_id: int
+    payee_username: str
+    amount: float
+    currency: str
+    status: str
+    upi_txn_id: str | None = None
+    note: str | None = None
+    created_at: dt.datetime
+    paid_at: dt.datetime | None = None
+
+
+class UpiLinkOut(BaseModel):
+    upi_link: str
+
+
+# ---------- ratings / reports ----------
+
+
+class RatingIn(BaseModel):
+    ratee_username: str = Field(min_length=1, max_length=40)
+    project_id: int | None = None
+    score: int = Field(ge=1, le=5)
+    comment: str | None = Field(default=None, max_length=2000)
+
+
+class RatingOut(BaseModel):
+    id: int
+    rater_id: int
+    rater_username: str
+    ratee_id: int
+    project_id: int | None = None
+    score: int
+    comment: str | None = None
+    created_at: dt.datetime
+
+
+class RatingSummaryOut(BaseModel):
+    average: float | None = None
+    count: int = 0
+    ratings: list[RatingOut] = Field(default_factory=list)
+
+
+class ReportIn(BaseModel):
+    reported_username: str | None = Field(default=None, max_length=40)
+    project_id: int | None = None
+    reason: str = Field(pattern=r"^(CHEATING|NO_SHOW|ABUSE|SPAM|OTHER)$")
+    details: str | None = Field(default=None, max_length=4000)
+
+
+class ReportOut(BaseModel):
+    id: int
+    reporter_id: int
+    reported_user_id: int | None = None
+    project_id: int | None = None
+    reason: str
+    details: str | None = None
+    status: str
+    created_at: dt.datetime
+
+
+# ---------- skill assessment ----------
+
+
+class SkillAssessmentIn(BaseModel):
+    project_id: int
+    ratee_username: str = Field(min_length=1, max_length=40)
+    skill_name: str = Field(min_length=1, max_length=60)
+    score: int = Field(ge=1, le=5)
+    comment: str | None = Field(default=None, max_length=2000)
+
+
+# ---------- profile projects / emails ----------
+
+
+class ProjectEmailOut(BaseModel):
+    user_id: int
+    username: str
+    email: str
+
+
+class UserProjectsOut(BaseModel):
+    ongoing: list[ProjectOut] = Field(default_factory=list)
+    finished: list[ProjectOut] = Field(default_factory=list)
+
+
+class SkillMatchOut(BaseModel):
+    matched: list[str] = Field(default_factory=list)
+    missing: list[str] = Field(default_factory=list)
+    below_level: list[str] = Field(default_factory=list)

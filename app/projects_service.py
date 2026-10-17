@@ -204,6 +204,53 @@ def visible_project_ids(db: Session, user_id: int) -> list[int]:
     return list(ids)
 
 
+def projects_for_user(db: Session, user_id: int) -> tuple[list[Project], list[Project]]:
+    """Ongoing vs finished projects the user leads or belongs to."""
+    project_ids = {
+        pid for (pid,) in db.execute(
+            select(Membership.project_id).where(Membership.user_id == user_id)
+        ).all()
+    }
+    owned = db.scalars(select(Project.id).where(Project.owner_id == user_id)).all()
+    project_ids.update(owned)
+    projects = [db.get(Project, pid) for pid in project_ids]
+    projects = [p for p in projects if p is not None]
+    ongoing = [p for p in projects if p.status != CLOSED]
+    finished = [p for p in projects if p.status == CLOSED]
+    ongoing.sort(key=lambda p: p.created_at, reverse=True)
+    finished.sort(key=lambda p: (p.closed_at or p.created_at), reverse=True)
+    return ongoing, finished
+
+
+def team_emails(db: Session, project_id: int) -> list[tuple[int, str, str]]:
+    rows = db.execute(
+        select(Membership, User)
+        .join(User, User.id == Membership.user_id)
+        .where(Membership.project_id == project_id)
+    ).all()
+    return [(m.user_id, u.username, u.email) for m, u in rows]
+
+
+def skill_match(db: Session, project_id: int, user_id: int) -> dict:
+    from .skills_service import profile_skills_for
+
+    project = db.get(Project, project_id)
+    if project is None:
+        return {"matched": [], "missing": [], "below_level": []}
+    required = required_skills(db, project_id)
+    user_skills = {s.name.lower(): s.level for s in profile_skills_for(db, user_id)}
+    matched, missing, below = [], [], []
+    for rs in required:
+        us_level = user_skills.get(rs.name.lower())
+        if us_level is None:
+            missing.append(rs.name)
+        elif us_level < rs.min_level:
+            below.append(rs.name)
+        else:
+            matched.append(rs.name)
+    return {"matched": matched, "missing": missing, "below_level": below}
+
+
 def require_member(db: Session, project_id: int, user_id: int) -> Membership:
     """Fetch a membership or raise the shared 403.
 
@@ -231,7 +278,10 @@ __all__ = [
     "OUTSIDER",
     "Relationship",
     "member_count",
+    "projects_for_user",
     "recompute_status",
+    "skill_match",
+    "team_emails",
     "relationship_for",
     "require_member",
     "required_skills",

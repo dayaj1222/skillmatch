@@ -289,6 +289,32 @@ CREATE TRIGGER trg_comment_flat_thread
 """
 
 
+MESSAGE_CONNECTION_FN = '''
+CREATE OR REPLACE FUNCTION check_message_connection() RETURNS trigger AS $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM connections
+        WHERE status = 'ACCEPTED'
+          AND ((requester_id = NEW.sender_id AND recipient_id = NEW.recipient_id)
+               OR (requester_id = NEW.recipient_id AND recipient_id = NEW.sender_id))
+    ) THEN
+        RAISE EXCEPTION 'sender % and recipient % are not connected',
+            NEW.sender_id, NEW.recipient_id
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+'''
+
+MESSAGE_CONNECTION_TRIGGER = """
+DROP TRIGGER IF EXISTS trg_message_connection ON messages;
+CREATE TRIGGER trg_message_connection
+    BEFORE INSERT ON messages
+    FOR EACH ROW EXECUTE FUNCTION check_message_connection();
+"""
+
+
 def install_triggers() -> None:
     """Create (or replace) all trigger functions and triggers."""
     with engine.begin() as conn:
@@ -297,6 +323,9 @@ def install_triggers() -> None:
         conn.execute(text(CAPACITY_TRIGGER))
         conn.execute(text(ACCEPT_FN))
         conn.execute(text(ACCEPT_TRIGGER))
+        # Message gating: only connected users may message.
+        conn.execute(text(MESSAGE_CONNECTION_FN))
+        conn.execute(text(MESSAGE_CONNECTION_TRIGGER))
         # Activity feed writers.
         conn.execute(text(ACTIVITY_APPLICATION_FN))
         conn.execute(text(ACTIVITY_APPLICATION_TRIGGER))

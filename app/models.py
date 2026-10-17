@@ -28,6 +28,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -75,9 +76,13 @@ class Profile(Base):
     location: Mapped[str | None] = mapped_column(String(120))
     bio: Mapped[str | None] = mapped_column(Text)
     contact_link: Mapped[str | None] = mapped_column(String(300))
+    avatar_url: Mapped[str | None] = mapped_column(String(500))
+    upi_id: Mapped[str | None] = mapped_column(String(100))
+    hourly_rate: Mapped[float | None] = mapped_column(Numeric(10, 2))
 
     __table_args__ = (
         CheckConstraint("year IS NULL OR (year >= 1 AND year <= 8)", name="ck_profile_year"),
+        CheckConstraint("hourly_rate IS NULL OR hourly_rate >= 0", name="ck_profile_hourly_rate"),
     )
 
     user: Mapped[User] = relationship(back_populates="profile")
@@ -430,8 +435,201 @@ class Activity(Base):
     __table_args__ = (
         CheckConstraint(
             "kind IN ('PROJECT_CREATED','APPLIED','ACCEPTED','REJECTED','WITHDRAWN',"
-            "'INVITED','JOINED','LEFT','ENDORSED','TASK_DONE','COMMENTED','CLOSED')",
+            "'INVITED','JOINED','LEFT','ENDORSED','TASK_DONE','COMMENTED','CLOSED',"
+            "'CONNECTED','RATED','REPORTED','PAID','ASSESSED')",
             name="ck_activity_kind",
+        ),
+    )
+
+
+class Follow(Base):
+    __tablename__ = "follows"
+
+    follower_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    following_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        CheckConstraint("follower_id <> following_id", name="ck_follow_not_self"),
+    )
+
+
+class Connection(Base):
+    __tablename__ = "connections"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    requester_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    recipient_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    status: Mapped[str] = mapped_column(
+        String(10), nullable=False, server_default=text("'PENDING'")
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    responded_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint("requester_id <> recipient_id", name="ck_connection_not_self"),
+        CheckConstraint(
+            "status IN ('PENDING','ACCEPTED','REJECTED','BLOCKED')",
+            name="ck_connection_status",
+        ),
+        UniqueConstraint("requester_id", "recipient_id", name="uq_connection_pair"),
+    )
+
+
+class Message(Base):
+    __tablename__ = "messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    sender_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    recipient_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+    read_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint("sender_id <> recipient_id", name="ck_message_not_self"),
+    )
+
+
+class Transaction(Base):
+    __tablename__ = "transactions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="SET NULL"), index=True
+    )
+    payer_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    payee_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(6), nullable=False, server_default=text("'INR'"))
+    status: Mapped[str] = mapped_column(
+        String(10), nullable=False, server_default=text("'PENDING'")
+    )
+    upi_txn_id: Mapped[str | None] = mapped_column(String(120))
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    paid_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint("payer_id <> payee_id", name="ck_transaction_not_self"),
+        CheckConstraint("amount >= 0", name="ck_transaction_amount"),
+        CheckConstraint(
+            "status IN ('PENDING','PAID','FAILED','CANCELLED')", name="ck_transaction_status"
+        ),
+    )
+
+
+class Rating(Base):
+    __tablename__ = "ratings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    rater_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    ratee_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    project_id: Mapped[int | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="SET NULL"), index=True
+    )
+    score: Mapped[int] = mapped_column(Integer, nullable=False)
+    comment: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        CheckConstraint("rater_id <> ratee_id", name="ck_rating_not_self"),
+        CheckConstraint("score >= 1 AND score <= 5", name="ck_rating_score"),
+        UniqueConstraint("rater_id", "ratee_id", "project_id", name="uq_rating_once"),
+    )
+
+
+class Report(Base):
+    __tablename__ = "reports"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    reporter_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    reported_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    project_id: Mapped[int | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="SET NULL"), index=True
+    )
+    reason: Mapped[str] = mapped_column(String(12), nullable=False)
+    details: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(
+        String(10), nullable=False, server_default=text("'OPEN'")
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "reason IN ('CHEATING','NO_SHOW','ABUSE','SPAM','OTHER')",
+            name="ck_report_reason",
+        ),
+        CheckConstraint(
+            "status IN ('OPEN','REVIEWED','RESOLVED')", name="ck_report_status"
+        ),
+    )
+
+
+class SkillAssessment(Base):
+    __tablename__ = "skill_assessments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    rater_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    ratee_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    skill_id: Mapped[int] = mapped_column(
+        ForeignKey("skills.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    score: Mapped[int] = mapped_column(Integer, nullable=False)
+    comment: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        CheckConstraint("rater_id <> ratee_id", name="ck_skill_assessment_not_self"),
+        CheckConstraint("score >= 1 AND score <= 5", name="ck_skill_assessment_score"),
+        UniqueConstraint(
+            "project_id", "rater_id", "ratee_id", "skill_id",
+            name="uq_skill_assessment_once",
         ),
     )
 
@@ -440,16 +638,23 @@ __all__ = [
     "Activity",
     "Application",
     "Base",
+    "Connection",
     "Endorsement",
+    "Follow",
     "Membership",
+    "Message",
     "Profile",
     "Project",
     "ProjectComment",
     "ProjectSkill",
     "ProjectUpdate",
+    "Rating",
+    "Report",
     "Skill",
+    "SkillAssessment",
     "SkillCategory",
     "Task",
+    "Transaction",
     "User",
     "UserSkill",
 ]

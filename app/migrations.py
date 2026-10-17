@@ -65,6 +65,41 @@ def _initiated_by(engine: Engine) -> None:
         )
 
 
+def _profile_extras(engine: Engine) -> None:
+    """Bring pre-existing databases forward for the new profile columns."""
+    with engine.begin() as conn:
+        for stmt in (
+            "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar_url varchar(500)",
+            "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS upi_id varchar(100)",
+            "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS hourly_rate numeric(10,2)",
+        ):
+            conn.execute(text(stmt))
+        conn.execute(
+            text(
+                "DO $$ BEGIN "
+                "IF NOT EXISTS (SELECT 1 FROM pg_constraint "
+                "WHERE conname = 'ck_profile_hourly_rate') THEN "
+                "ALTER TABLE profiles ADD CONSTRAINT ck_profile_hourly_rate "
+                "CHECK (hourly_rate IS NULL OR hourly_rate >= 0); "
+                "END IF; END $$;"
+            )
+        )
+
+
+def _activity_kinds(engine: Engine) -> None:
+    """Widen the activity.kind CHECK for the new event kinds."""
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE activity DROP CONSTRAINT IF EXISTS ck_activity_kind"))
+        conn.execute(
+            text(
+                "ALTER TABLE activity ADD CONSTRAINT ck_activity_kind CHECK ("
+                "kind IN ('PROJECT_CREATED','APPLIED','ACCEPTED','REJECTED','WITHDRAWN',"
+                "'INVITED','JOINED','LEFT','ENDORSED','TASK_DONE','COMMENTED','CLOSED',"
+                "'CONNECTED','RATED','REPORTED','PAID','ASSESSED'))"
+            )
+        )
+
+
 def _triggers(engine: Engine) -> None:
     """Install the PL/pgSQL invariants and activity-feed writers."""
     from .triggers import install_triggers
@@ -77,7 +112,9 @@ MIGRATIONS: list[tuple[str, Callable[[Engine], None]]] = [
     ("0001_extensions", _extensions),
     ("0002_tables", _tables),
     ("0003_initiated_by", _initiated_by),
-    ("0004_triggers", _triggers),
+    ("0004_profile_extras", _profile_extras),
+    ("0005_activity_kinds", _activity_kinds),
+    ("0006_triggers", _triggers),
 ]
 
 

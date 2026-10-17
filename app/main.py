@@ -13,11 +13,18 @@ from .database import init_db
 from .routers import (
     auth,
     comments,
+    connections,
     dashboard,
+    follows,
+    messages,
+    payments,
     profiles,
     projects,
+    ratings,
+    reports,
     schema,
     search,
+    skill_assessments,
     skills,
     tasks,
 )
@@ -42,6 +49,13 @@ app.include_router(tasks.router)
 app.include_router(comments.router)
 app.include_router(dashboard.router)
 app.include_router(schema.router)
+app.include_router(connections.router)
+app.include_router(follows.router)
+app.include_router(messages.router)
+app.include_router(payments.router)
+app.include_router(ratings.router)
+app.include_router(reports.router)
+app.include_router(skill_assessments.router)
 
 
 @app.get("/api/health")
@@ -54,6 +68,13 @@ if STATIC_DIR.is_dir():
         "/assets",
         StaticFiles(directory=STATIC_DIR / "assets"),
         name="assets",
+    )
+    avatars_dir = STATIC_DIR / "avatars"
+    avatars_dir.mkdir(parents=True, exist_ok=True)
+    app.mount(
+        "/avatars",
+        StaticFiles(directory=avatars_dir),
+        name="avatars",
     )
 
     @app.get("/{full_path:path}")

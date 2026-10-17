@@ -39,6 +39,8 @@ from ..projects_service import (
     recompute_status,
     relationship_for,
     set_required_skills,
+    skill_match,
+    team_emails,
     to_out,
 )
 from ..schemas import (
@@ -47,9 +49,11 @@ from ..schemas import (
     DecisionIn,
     MemberOut,
     ProjectDetailOut,
+    ProjectEmailOut,
     ProjectIn,
     ProjectOut,
     ProjectUpdateIn,
+    SkillMatchOut,
     UpdateBodyIn,
     UpdateOut,
 )
@@ -392,6 +396,37 @@ def reopen_project(
     db.commit()
     db.refresh(project)
     return to_out(db, project)
+
+
+# ---------- team emails / skill match ----------
+
+
+@router.get("/{project_id}/team-emails", response_model=list[ProjectEmailOut])
+def project_team_emails(
+    project_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[ProjectEmailOut]:
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="No such project")
+    membership = db.get(Membership, (project_id, user.id))
+    if membership is None and project.owner_id != user.id:
+        raise HTTPException(status_code=403, detail="Only team members can view emails")
+    out = []
+    for uid, username, email in team_emails(db, project_id):
+        out.append(ProjectEmailOut(user_id=uid, username=username, email=email))
+    return out
+
+
+@router.get("/{project_id}/skill-match", response_model=SkillMatchOut)
+def project_skill_match(
+    project_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> SkillMatchOut:
+    result = skill_match(db, project_id, user.id)
+    return SkillMatchOut(**result)
 
 
 # ---------- updates ----------

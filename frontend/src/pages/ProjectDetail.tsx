@@ -461,11 +461,12 @@ function ApplyForm({ projectId, onApplied }: { projectId: number; onApplied: () 
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [match, setMatch] = useState<{ matched: string[]; missing: string[]; below_level: string[] } | null>(null);
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
+  const doApply = async () => {
     setBusy(true);
+    setError(null);
     try {
       await api.apply(projectId, message);
       onApplied();
@@ -473,10 +474,31 @@ function ApplyForm({ projectId, onApplied }: { projectId: number; onApplied: () 
       setError(err instanceof Error ? err.message : "Could not apply");
     } finally {
       setBusy(false);
+      setConfirmOpen(false);
+    }
+  };
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      const m = await api.skillMatch(projectId);
+      setMatch(m);
+      if ((m.missing?.length ?? 0) > 0 || (m.below_level?.length ?? 0) > 0) {
+        setConfirmOpen(true);
+      } else {
+        await doApply();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not check skills");
+    } finally {
+      setBusy(false);
     }
   };
 
   return (
+    <>
     <form onSubmit={submit} className="block p-5">
       <SectionHead title="Apply to join" />
       <div className="mt-4 space-y-4">
@@ -499,6 +521,32 @@ function ApplyForm({ projectId, onApplied }: { projectId: number; onApplied: () 
         </button>
       </div>
     </form>
+
+    {confirmOpen && match && (
+      <div className="skill-modal-backdrop" role="dialog" aria-modal="true">
+        <div className="skill-modal animate-pop">
+          <h2 className="display text-[1.4rem]">Skills not matched</h2>
+          <p className="mt-2 text-[0.875rem] text-muted">
+            You are missing or below the required level for some skills. You can still apply; the owner will see this.
+          </p>
+          {match.missing.length > 0 && (
+            <p className="mt-2 text-[0.875rem]">Missing: {match.missing.join(", ")}</p>
+          )}
+          {match.below_level.length > 0 && (
+            <p className="mt-2 text-[0.875rem]">Below level: {match.below_level.join(", ")}</p>
+          )}
+          <div className="mt-4 flex gap-2">
+            <button type="button" className="btn btn-secondary" onClick={() => setConfirmOpen(false)}>
+              Cancel
+            </button>
+            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void doApply()}>
+              {busy ? "Sending" : "Apply anyway"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 

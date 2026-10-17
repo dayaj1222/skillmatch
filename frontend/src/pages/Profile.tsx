@@ -78,7 +78,7 @@ export function ProfilePage() {
       {isMe && editing && mine ? (
         <EditProfile profile={mine} onSaved={() => void load(true)} />
       ) : (
-        <ReadOnlyProfile profile={profile} isMe={isMe} onChanged={() => void load(true)} />
+        <ReadOnlyProfile profile={profile} isMe={isMe} onChanged={() => void load(true)} onToggleEdit={() => setEditing(true)} />
       )}
     </div>
   );
@@ -101,7 +101,15 @@ function ProfileHeader({
 
   return (
     <div className="flex flex-wrap items-start justify-between gap-4">
-      <div className="min-w-0">
+      <div className="flex items-start gap-4 min-w-0">
+        {profile.avatar_url && (
+          <img
+            src={profile.avatar_url}
+            alt={profile.username}
+            className="h-16 w-16 rounded-full object-cover border border-rule"
+          />
+        )}
+        <div className="min-w-0">
         <h1 className="display text-[1.75rem]">
           {profile.full_name || profile.username}
         </h1>
@@ -124,6 +132,7 @@ function ProfileHeader({
             Contact
           </a>
         )}
+      </div>
       </div>
 
       {isMe ? (
@@ -297,12 +306,34 @@ function ReadOnlyProfile({
   profile,
   isMe,
   onChanged,
+  onToggleEdit,
 }: {
   profile: PublicProfile;
   isMe: boolean;
   onChanged: () => void;
+  onToggleEdit?: () => void;
 }) {
   const [skillModalOpen, setSkillModalOpen] = useState(false);
+  const [projects, setProjects] = useState<{ ongoing: Project[]; finished: Project[] } | null>(null);
+
+  useEffect(() => {
+    api
+      .userProjects(profile.username)
+      .then(setProjects)
+      .catch(() => setProjects({ ongoing: [], finished: [] }));
+  }, [profile.username]);
+
+  const emailTeam = async (projectId: number) => {
+    try {
+      const emails = await api.teamEmails(projectId);
+      const to = emails.map((e) => e.email).join(",");
+      const subject = encodeURIComponent("Meeting for project");
+      const body = encodeURIComponent("Hi team,\\n\\nLet's schedule a meeting.\\n");
+      window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
+    } catch {
+      /* ignore */
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -324,10 +355,10 @@ function ReadOnlyProfile({
               : "Vouch for a skill you have seen them use."
           }
         />
-        {isMe && (
-          <button type="button" onClick={() => setSkillModalOpen(true)} className="btn btn-secondary mb-4">
+        {isMe && onToggleEdit && (
+          <button type="button" onClick={onToggleEdit} className="btn btn-secondary mb-4">
             <Plus size={14} weight="bold" />
-            Add skills
+            Edit skills
           </button>
         )}
         {profile.skills.length === 0 ? (
@@ -360,6 +391,55 @@ function ReadOnlyProfile({
           </ul>
         )}
       </div>
+      <div>
+        <SectionHead title="Ongoing projects" />
+        {projects === null ? (
+          <p className="text-[0.875rem] text-muted">Loading…</p>
+        ) : projects.ongoing.length === 0 ? (
+          <p className="text-[0.875rem] text-muted">No ongoing projects.</p>
+        ) : (
+          <ul className="register border-b border-rule">
+            {projects.ongoing.map((p) => (
+              <li key={p.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
+                <Link to={`/projects/${p.id}`} className="text-[0.9375rem] font-medium text-signal hover:underline">
+                  {p.title}
+                </Link>
+                <span className="text-[0.8125rem] text-muted">
+                  {p.status} · {p.member_count}/{p.capacity}
+                </span>
+                {isMe && (
+                  <button type="button" onClick={() => void emailTeam(p.id)} className="btn btn-secondary h-7 px-2 text-[0.8125rem]">
+                    Email team
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div>
+        <SectionHead title="Finished projects" />
+        {projects === null ? (
+          <p className="text-[0.875rem] text-muted">Loading…</p>
+        ) : projects.finished.length === 0 ? (
+          <p className="text-[0.875rem] text-muted">No finished projects.</p>
+        ) : (
+          <ul className="register border-b border-rule">
+            {projects.finished.map((p) => (
+              <li key={p.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
+                <Link to={`/projects/${p.id}`} className="text-[0.9375rem] font-medium text-signal hover:underline">
+                  {p.title}
+                </Link>
+                <span className="text-[0.8125rem] text-muted">
+                  Closed · {p.member_count}/{p.capacity}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
       {isMe && skillModalOpen && (
         <SkillPickerModal
           current={profile.skills}
@@ -523,6 +603,7 @@ function SkillRow({
 function EditProfile({ profile, onSaved }: { profile: Profile; onSaved: () => void }) {
   const { user } = useAuth();
   const [form, setForm] = useState(profile);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -536,6 +617,9 @@ function EditProfile({ profile, onSaved }: { profile: Profile; onSaved: () => vo
     setSaving(true);
     setSaved(false);
     try {
+      if (avatarFile) {
+        await api.uploadAvatar(avatarFile);
+      }
       await api.updateProfile({
         full_name: form.full_name,
         headline: form.headline,
@@ -544,6 +628,8 @@ function EditProfile({ profile, onSaved }: { profile: Profile; onSaved: () => vo
         location: form.location,
         bio: form.bio,
         contact_link: form.contact_link,
+        upi_id: form.upi_id,
+        hourly_rate: form.hourly_rate,
       });
       setSaved(true);
       onSaved();
@@ -559,6 +645,19 @@ function EditProfile({ profile, onSaved }: { profile: Profile; onSaved: () => vo
       <form onSubmit={submit} className="block space-y-4 p-5">
         <SectionHead title="Your details" meta="Shown on your public profile." />
         {error && <ErrorNote message={error} />}
+
+        <div>
+          <label htmlFor="avatar" className="field-label">
+            Profile picture
+          </label>
+          <input
+            id="avatar"
+            type="file"
+            accept="image/*"
+            onChange={(e) => setAvatarFile(e.target.files?.[0] ?? null)}
+            className="field-input"
+          />
+        </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
@@ -633,6 +732,34 @@ function EditProfile({ profile, onSaved }: { profile: Profile; onSaved: () => vo
               onChange={(e) => set("contact_link", e.target.value || null)}
             />
             <p className="field-help">Where people reach you. Email is never shown.</p>
+          </div>
+          <div>
+            <label htmlFor="upi_id" className="field-label">
+              UPI ID
+            </label>
+            <input
+              id="upi_id"
+              className="field-input"
+              placeholder="you@upi"
+              value={form.upi_id ?? ""}
+              onChange={(e) => set("upi_id", e.target.value || null)}
+            />
+          </div>
+          <div>
+            <label htmlFor="hourly_rate" className="field-label">
+              Hourly rate
+            </label>
+            <input
+              id="hourly_rate"
+              type="number"
+              min={0}
+              step="0.01"
+              className="field-input"
+              value={form.hourly_rate ?? ""}
+              onChange={(e) =>
+                set("hourly_rate", e.target.value ? Number(e.target.value) : null)
+              }
+            />
           </div>
         </div>
 

@@ -2,19 +2,25 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+import os
+import uuid
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..auth import get_current_user
 from ..database import get_db
 from ..models import Endorsement, Profile, Skill, User, UserSkill
+from ..projects_service import projects_for_user
+from ..projects_service import to_out as project_to_out
 from ..schemas import (
     ProfileIn,
     ProfileOut,
     ProfileSkillOut,
     PublicProfileOut,
     SkillSetIn,
+    UserProjectsOut,
 )
 from ..skills_service import (
     profile_skills_for,
@@ -74,6 +80,43 @@ def public_profile(username: str, db: Session = Depends(get_db)) -> PublicProfil
     if user is None:
         raise HTTPException(status_code=404, detail="No such user")
     return public_profiles_for(db, [user.id])[user.id]
+
+
+@router.post("/profile/avatar", response_model=ProfileOut)
+def upload_avatar(
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Profile:
+    profile = db.get(Profile, user.id)
+    if profile is None:
+        profile = Profile(user_id=user.id)
+        db.add(profile)
+    ext = os.path.splitext(file.filename or "")[1].lower() or ".png"
+    if ext not in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
+        raise HTTPException(status_code=400, detail="Unsupported image type")
+    upload_dir = os.environ.get("SKILLMATCH_UPLOAD_DIR", "static/avatars")
+    os.makedirs(upload_dir, exist_ok=True)
+    name = f"{user.id}-{uuid.uuid4().hex}{ext}"
+    path = os.path.join(upload_dir, name)
+    with open(path, "wb") as f:
+        f.write(file.file.read())
+    profile.avatar_url = f"/avatars/{name}"
+    db.commit()
+    db.refresh(profile)
+    return profile
+
+
+@router.get("/profile/{username}/projects", response_model=UserProjectsOut)
+def user_projects(username: str, db: Session = Depends(get_db)) -> UserProjectsOut:
+    user = db.scalar(select(User).where(User.username == username))
+    if user is None:
+        raise HTTPException(status_code=404, detail="No such user")
+    ongoing, finished = projects_for_user(db, user.id)
+    return UserProjectsOut(
+        ongoing=[project_to_out(db, p) for p in ongoing],
+        finished=[project_to_out(db, p) for p in finished],
+    )
 
 
 @router.post("/profile/{username}/endorse/{skill_id}", status_code=status.HTTP_201_CREATED)

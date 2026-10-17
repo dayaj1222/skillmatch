@@ -35,7 +35,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     ...init,
     credentials: "same-origin",
     headers: {
-      ...(init.body ? { "Content-Type": "application/json" } : {}),
+      ...(init.body && !(init.body instanceof FormData)
+        ? { "Content-Type": "application/json" }
+        : {}),
       ...init.headers,
     },
   });
@@ -199,4 +201,64 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ body }),
     }),
+
+  // ---- profile extras ----
+  uploadAvatar: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<Profile>("/api/profile/avatar", { method: "POST", body: form, headers: {} });
+  },
+  userProjects: (username: string) =>
+    request<{ ongoing: Project[]; finished: Project[] }>(`/api/profile/${encodeURIComponent(username)}/projects`),
+  teamEmails: (projectId: number) =>
+    request<{ user_id: number; username: string; email: string }[]>(`/api/projects/${projectId}/team-emails`),
+  skillMatch: (projectId: number) =>
+    request<{ matched: string[]; missing: string[]; below_level: string[] }>(`/api/projects/${projectId}/skill-match`),
+
+  // ---- connections ----
+  requestConnection: (username: string) =>
+    request<any>("/api/connections/request", { method: "POST", body: JSON.stringify({ username }) }),
+  acceptConnection: (id: number) =>
+    request<any>(`/api/connections/${id}/accept`, { method: "POST" }),
+  rejectConnection: (id: number) =>
+    request<any>(`/api/connections/${id}/reject`, { method: "POST" }),
+  removeConnection: (username: string) =>
+    request<void>(`/api/connections/${encodeURIComponent(username)}`, { method: "DELETE" }),
+  connections: () => request<any[]>("/api/connections"),
+  connectionRequests: () => request<any[]>("/api/connections/requests"),
+  connectionStatus: (username: string) =>
+    request<{ status: string }>(`/api/connections/status/${encodeURIComponent(username)}`),
+
+  // ---- follows ----
+  follow: (username: string) => request<void>(`/api/follows/${encodeURIComponent(username)}`, { method: "POST" }),
+  unfollow: (username: string) => request<void>(`/api/follows/${encodeURIComponent(username)}`, { method: "DELETE" }),
+
+  // ---- messages ----
+  sendMessage: (recipient_username: string, body: string) =>
+    request<any>("/api/messages", { method: "POST", body: JSON.stringify({ recipient_username, body }) }),
+  messageThreads: () => request<any[]>("/api/messages/threads"),
+  messageThread: (username: string) => request<any[]>(`/api/messages/${encodeURIComponent(username)}`),
+  markMessageRead: (id: number) => request<any>(`/api/messages/${id}/read`, { method: "PATCH" }),
+
+  // ---- payments ----
+  createPayment: (body: { payee_username: string; amount: number; project_id?: number; note?: string }) =>
+    request<any>("/api/payments", { method: "POST", body: JSON.stringify(body) }),
+  payment: (id: number) => request<any>(`/api/payments/${id}`),
+  upiLink: (id: number) => request<{ upi_link: string }>(`/api/payments/${id}/upi-link`),
+  confirmPayment: (id: number, upi_txn_id?: string) =>
+    request<any>(`/api/payments/${id}/confirm`, { method: "POST", body: JSON.stringify({ upi_txn_id }) }),
+  payments: (role = "all") => request<any[]>(`/api/payments?role=${role}`),
+
+  // ---- ratings ----
+  createRating: (body: { ratee_username: string; project_id?: number; score: number; comment?: string }) =>
+    request<any>("/api/ratings", { method: "POST", body: JSON.stringify(body) }),
+  ratings: (username: string) => request<any>(`/api/ratings/${encodeURIComponent(username)}`),
+
+  // ---- reports ----
+  createReport: (body: { reported_username?: string; project_id?: number; reason: string; details?: string }) =>
+    request<any>("/api/reports", { method: "POST", body: JSON.stringify(body) }),
+
+  // ---- skill assessments ----
+  assessSkill: (body: { project_id: number; ratee_username: string; skill_name: string; score: number; comment?: string }) =>
+    request<any>("/api/skill-assessments", { method: "POST", body: JSON.stringify(body) }),
 };
