@@ -6,11 +6,13 @@ import type { SchemaEdge, SchemaGraph as Graph, SchemaNode } from "../lib/types"
  * The relational graph.
  *
  * Nodes are tables, edges are the real foreign keys the backend read from
- * ``pg_constraint``. The layout is computed here, deterministically, from the
- * dependency depth of each table: tables nothing references sit on the left,
- * and each referencing table sits one column to the right of what it points
- * at. Nothing about the arrangement is hardcoded, so the picture follows the
- * schema.
+ * ``pg_constraint``. Tables are laid out in horizontal domain lanes —
+ * identity, skills, projects — so the grouping is readable at a glance
+ * instead of being inferred from where the boxes happen to land.
+ *
+ * The domain map is a hint, not a whitelist: a table it does not mention lands
+ * in an "Other" lane, so a new table appears the moment a migration creates it.
+ * Row counts, columns, and edges all come from the live catalog.
  *
  * Hover a table to isolate its relationships; the rest dims. Pan by dragging
  * the background; zoom with the buttons, Ctrl/Cmd+wheel, or a two-finger
@@ -20,43 +22,68 @@ import type { SchemaEdge, SchemaGraph as Graph, SchemaNode } from "../lib/types"
 
 export function SchemaGraph({ graph }: { graph: Graph }) {
   const [hovered, setHovered] = useState<string | null>(null);
-  // Start fully zoomed in; the Reset button returns here, not to 1x.
-  const [zoom, setZoom] = useState(MAX_ZOOM);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const dragRef = useRef<{ x: number; y: number } | null>(null);
+  // The visible window, in SVG user units. Zoom and pan are both expressed by
+  // moving this rectangle, which keeps the maths exact: no CSS transform means
+  // no ambiguity about which point the browser scales around.
+  const [view, setView] = useState({ x: 0, y: 0, w: 0, h: 0 });
+  const dragRef = useRef<{ x: number; y: number; vx: number; vy: number } | null>(null);
   // Touch state: one finger pans, two fingers pinch-zoom the graph (not the page).
-  const touchRef = useRef<{ x: number; y: number } | null>(null);
-  const pinchRef = useRef<{ dist: number; zoom: number } | null>(null);
+  const touchRef = useRef<{ x: number; y: number; vx: number; vy: number } | null>(null);
+  const pinchRef = useRef<{ dist: number; view: typeof view } | null>(null);
   const frameRef = useRef<HTMLDivElement>(null);
 
   const layout = useMemo(() => layoutGraph(graph), [graph]);
 
-  // "Home" is max zoom, top-centred: the drawing's top-centre sits just below
-  // the header, so the first columns land fully in view. Solved exactly from
-  // the measured frame and the meet-fitted drawing (CSS zoom holds the frame
-  // centre, so this offset is stable at any frame size). Reset returns here.
+  // Fit the drawing's width to the frame and pin the top. A wide swimlane
+  // layout is then fully visible side to side and scrolls down lane by lane.
   const goHome = () => {
     const el = frameRef.current;
-    setZoom(MAX_ZOOM);
-    if (!el) {
-      setPan({ x: 0, y: 0 });
-      return;
-    }
-    // Meet-fitting centres the drawing, so x needs no offset; y puts the
-    // drawing's top edge just below the header.
+    if (!el) return;
+    const fw = el.clientWidth;
     const fh = el.clientHeight;
-    const s = Math.min(el.clientWidth / layout.width, fh / layout.height);
-    const oy = (fh - layout.height * s) / 2;
-    setPan({
-      x: 0,
-      y: Math.round(24 - fh / 2 - (oy - fh / 2) * MAX_ZOOM),
-    });
+    // Width fits exactly; height follows the frame's aspect ratio.
+    const h = (layout.width * fh) / Math.max(1, fw);
+    setView({ x: 0, y: 0, w: layout.width, h });
   };
 
   useEffect(() => {
     goHome();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [layout.width]);
+
+  /** Zoom by `factor` (>1 zooms in) keeping the client point (cx, cy) fixed. */
+  const zoomAt = (factor: number, cx?: number, cy?: number) => {
+    const el = frameRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const px = cx === undefined ? rect.width / 2 : cx - rect.left;
+    const py = cy === undefined ? rect.height / 2 : cy - rect.top;
+    setView((v) => {
+      const nextW = clampWidth(v.w / factor, layout.width);
+      const real = v.w / nextW;
+      const nextH = v.h / real;
+      // The point under the cursor, in user units, must stay put.
+      const ux = v.x + (px / Math.max(1, rect.width)) * v.w;
+      const uy = v.y + (py / Math.max(1, rect.height)) * v.h;
+      return {
+        x: ux - (px / Math.max(1, rect.width)) * nextW,
+        y: uy - (py / Math.max(1, rect.height)) * nextH,
+        w: nextW,
+        h: nextH,
+      };
+    });
+  };
+
+  const panBy = (dxClient: number, dyClient: number) => {
+    const el = frameRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setView((v) => ({
+      ...v,
+      x: v.x - (dxClient / Math.max(1, rect.width)) * v.w,
+      y: v.y - (dyClient / Math.max(1, rect.height)) * v.h,
+    }));
+  };
 
   const neighbours = useMemo(() => {
     if (!hovered) return null;
@@ -82,7 +109,7 @@ export function SchemaGraph({ graph }: { graph: Graph }) {
           <button
             type="button"
             className="btn btn-ghost h-7 w-7 px-0"
-            onClick={() => setZoom((z) => clampZoom(z - 0.15))}
+            onClick={() => zoomAt(1 / 1.25)}
             aria-label="Zoom out"
           >
             &minus;
@@ -90,7 +117,7 @@ export function SchemaGraph({ graph }: { graph: Graph }) {
           <button
             type="button"
             className="btn btn-ghost h-7 w-7 px-0"
-            onClick={() => setZoom((z) => clampZoom(z + 0.15))}
+            onClick={() => zoomAt(1.25)}
             aria-label="Zoom in"
           >
             +
@@ -107,13 +134,14 @@ export function SchemaGraph({ graph }: { graph: Graph }) {
 
       <div
         ref={frameRef}
-        className="relative h-[78vh] min-h-[720px] cursor-grab overflow-hidden bg-paper active:cursor-grabbing"
+        className="relative h-[78vh] min-h-[720px] cursor-grab touch-none overflow-hidden bg-paper active:cursor-grabbing"
         onMouseDown={(e) => {
-          dragRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+          dragRef.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
         }}
         onMouseMove={(e) => {
-          if (!dragRef.current) return;
-          setPan({ x: e.clientX - dragRef.current.x, y: e.clientY - dragRef.current.y });
+          const d = dragRef.current;
+          if (!d) return;
+          panBy(e.clientX - d.x, e.clientY - d.y);
         }}
         onMouseUp={() => {
           dragRef.current = null;
@@ -124,20 +152,21 @@ export function SchemaGraph({ graph }: { graph: Graph }) {
         onTouchStart={(e) => {
           if (e.touches.length === 1) {
             const t = e.touches[0];
-            touchRef.current = { x: t.clientX - pan.x, y: t.clientY - pan.y };
+            touchRef.current = { x: t.clientX, y: t.clientY, vx: view.x, vy: view.y };
             pinchRef.current = null;
           } else if (e.touches.length === 2) {
             touchRef.current = null;
-            pinchRef.current = { dist: touchDistance(e.touches), zoom };
+            pinchRef.current = { dist: touchDistance(e.touches), view };
           }
         }}
         onTouchMove={(e) => {
           if (e.touches.length === 1 && touchRef.current) {
             const t = e.touches[0];
-            setPan({ x: t.clientX - touchRef.current.x, y: t.clientY - touchRef.current.y });
+            panBy(t.clientX - touchRef.current.x, t.clientY - touchRef.current.y);
           } else if (e.touches.length === 2 && pinchRef.current) {
             const ratio = touchDistance(e.touches) / (pinchRef.current.dist || 1);
-            setZoom(clampZoom(pinchRef.current.zoom * ratio));
+            setView(pinchRef.current.view);
+            zoomAt(ratio);
           }
         }}
         onTouchEnd={(e) => {
@@ -151,29 +180,66 @@ export function SchemaGraph({ graph }: { graph: Graph }) {
           // zoom intent. A plain scroll is not: let the page scroll normally.
           if (!e.ctrlKey && !e.metaKey) return;
           e.preventDefault();
-          setZoom((z) => clampZoom(z - e.deltaY * 0.002));
+          zoomAt(e.deltaY < 0 ? 1.08 : 1 / 1.08, e.clientX, e.clientY);
         }}
       >
-        <div
-          className="h-full w-full"
-          style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
-        >
         <svg
           className="h-full w-full touch-none"
-          viewBox={`0 0 ${layout.width} ${layout.height}`}
-          preserveAspectRatio="xMidYMid meet"
+          viewBox={`${view.x} ${view.y} ${view.w || layout.width} ${view.h || layout.height}`}
+          preserveAspectRatio="xMidYMin slice"
         >
           <g>
-            {/* Edges first, so boxes sit on top of the lines. */}
+            {/* Lanes first: they are the backdrop the cards sit on. */}
+            {layout.lanes.map((lane) => (
+              <g key={lane.label}>
+                <rect
+                  x={lane.x}
+                  y={lane.y}
+                  width={lane.width}
+                  height={lane.height}
+                  rx={10}
+                  className="fill-surface stroke-rule"
+                />
+                <text
+                  x={lane.x + 16}
+                  y={lane.y + 24}
+                  className="fill-muted"
+                  style={{ fontSize: 11, fontWeight: 600, letterSpacing: 0.8 }}
+                >
+                  {lane.label.toUpperCase()}
+                </text>
+              </g>
+            ))}
+
+            {/* Edges next, so boxes sit on top of the lines. */}
             {graph.edges.map((e, i) => {
-              const from = layout.anchors.get(`R:${e.source_table}.${e.source_column}`);
-              const to = layout.anchors.get(`L:${e.target_table}.${e.target_column}`);
-              if (!from || !to) return null;
+              // Pick the facing sides so the line leaves the card it comes from
+              // and arrives at the card it points to, whichever is further left.
+              // Cards in a swimlane sit side by side, so a fixed right-to-left
+              // route would double back through both boxes.
+              const srcCol = layout.anchors.get(`R:${e.source_table}.${e.source_column}`);
+              const srcColL = layout.anchors.get(`L:${e.source_table}.${e.source_column}`);
+              const tgtCol = layout.anchors.get(`L:${e.target_table}.${e.target_column}`);
+              const tgtColR = layout.anchors.get(`R:${e.target_table}.${e.target_column}`);
+              if (!srcCol || !tgtCol) return null;
               const dim = !edgeActive(e);
               const hot = hovered !== null && edgeActive(e);
-              // A gentle S-curve reads as a relationship, not a wire crossing.
-              const midX = (from.x + to.x) / 2;
-              const d = `M ${from.x} ${from.y} C ${midX} ${from.y}, ${midX} ${to.y}, ${to.x} ${to.y}`;
+
+              let from = srcCol;
+              let to = tgtCol;
+              if (tgtCol.x < srcCol.x && srcColL && tgtColR) {
+                // Target is to the left: leave left, arrive right.
+                from = srcColL;
+                to = tgtColR;
+              }
+
+              // Same column (cards stacked vertically): bow out to the right so
+              // the line never runs straight through the card it starts from.
+              const sameColumn = Math.abs(to.x - from.x) < 8;
+              const d = sameColumn
+                ? `M ${from.x} ${from.y} C ${from.x + 46} ${from.y}, ${to.x + 46} ${to.y}, ${to.x} ${to.y}`
+                : `M ${from.x} ${from.y} C ${(from.x + to.x) / 2} ${from.y}, ${(from.x + to.x) / 2} ${to.y}, ${to.x} ${to.y}`;
+
               return (
                 <path
                   key={`${e.name}-${i}`}
@@ -212,18 +278,16 @@ export function SchemaGraph({ graph }: { graph: Graph }) {
           </g>
         </svg>
         </div>
-
       </div>
     </div>
   );
 }
 
-const MAX_ZOOM = 2;
-const MIN_ZOOM = 0.4;
-
-function clampZoom(z: number): number {
-  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, +z.toFixed(2)));
+function clampWidth(w: number, layoutWidth: number): number {
+  return Math.min(layoutWidth, Math.max(layoutWidth / MAX_ZOOM, +w.toFixed(2)));
 }
+
+const MAX_ZOOM = 2.6;
 
 function touchDistance(touches: React.TouchList): number {
   const [a, b] = [touches[0], touches[1]];
@@ -322,8 +386,17 @@ interface LaidOutNode {
   width: number;
 }
 
+interface LaidOutLane {
+  label: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 interface Layout {
   nodes: LaidOutNode[];
+  lanes: LaidOutLane[];
   anchors: Map<string, { x: number; y: number }>;
   width: number;
   height: number;
@@ -331,90 +404,118 @@ interface Layout {
 
 const ROW = 24;
 const HEADER = 32;
-const NODE_W = 240;
-const COL_GAP = 160;
-const ROW_GAP = 34;
-const PAD = 48;
+const NODE_W = 232;
+const NODE_GAP = 26;
+const ROW_GAP = 18;
+const LANE_PAD_TOP = 40;
+const LANE_PAD_BOTTOM = 16;
+const LANE_GAP = 18;
+const LANE_LABEL_W = 116;
+const PAD = 24;
+const PER_ROW = 4;
 
 /**
- * Depth of each table: a table that nothing points at is depth 0; a table that
- * points at depth-N tables is depth N+1. Cycles fall back to depth 0 so the
- * layout always terminates.
+ * Which lane a table belongs to.
+ *
+ * This is a hint, not a whitelist: a table the map does not mention lands in
+ * "Other" rather than disappearing, so a new table still shows up the moment a
+ * migration creates it.
  */
-function depthOf(nodes: SchemaNode[], edges: SchemaEdge[]): Map<string, number> {
-  const parentsOf = new Map<string, string[]>();
-  for (const e of edges) {
-    if (e.source_table === e.target_table) continue;
-    const list = parentsOf.get(e.source_table) ?? [];
-    list.push(e.target_table);
-    parentsOf.set(e.source_table, list);
-  }
+const DOMAIN: Record<string, string> = {
+  users: "Identity",
+  profiles: "Identity",
+  activity: "Identity",
+  oauth_accounts: "Identity",
+  follows: "Identity",
+  connections: "Identity",
+  messages: "Identity",
+  skill_categories: "Skills",
+  skills: "Skills",
+  user_skills: "Skills",
+  endorsements: "Skills",
+  skill_assessments: "Skills",
+  projects: "Projects",
+  project_skills: "Projects",
+  applications: "Projects",
+  memberships: "Projects",
+  project_updates: "Projects",
+  tasks: "Projects",
+  project_comments: "Projects",
+  ratings: "Projects",
+  reports: "Projects",
+  transactions: "Projects",
+};
 
-  const depth = new Map<string, number>();
-  const visiting = new Set<string>();
+const LANE_ORDER = ["Identity", "Skills", "Projects", "Other"];
 
-  const walk = (name: string): number => {
-    if (depth.has(name)) return depth.get(name) as number;
-    if (visiting.has(name)) return 0; // cycle: stop, treat as a root
-    visiting.add(name);
-    const parents = parentsOf.get(name) ?? [];
-    const d = parents.length === 0 ? 0 : 1 + Math.max(...parents.map(walk));
-    visiting.delete(name);
-    depth.set(name, d);
-    return d;
-  };
-
-  for (const n of nodes) walk(n.name);
-  return depth;
-}
-
+/**
+ * Lay the graph out as horizontal domain lanes.
+ *
+ * Tables keep their domain's lane; within a lane they wrap every PER_ROW
+ * cards so the drawing stays a readable width. Lane heights are computed from
+ * their tallest row, so cards never collide and nothing runs off the bottom.
+ */
 function layoutGraph(graph: Graph): Layout {
-  const depth = depthOf(graph.nodes, graph.edges);
-
-  // Group tables into columns by depth.
-  const columns = new Map<number, SchemaNode[]>();
+  const byLane = new Map<string, SchemaNode[]>();
   for (const n of graph.nodes) {
-    const d = depth.get(n.name) ?? 0;
-    const list = columns.get(d) ?? [];
+    const lane = DOMAIN[n.name] ?? "Other";
+    const list = byLane.get(lane) ?? [];
     list.push(n);
-    columns.set(d, list);
+    byLane.set(lane, list);
   }
 
-  // Order within a column by name so the drawing is stable run to run.
-  for (const list of columns.values()) list.sort((a, b) => a.name.localeCompare(b.name));
+  // Stable order inside a lane so the picture does not reshuffle run to run.
+  for (const list of byLane.values()) list.sort((a, b) => a.name.localeCompare(b.name));
 
   const nodes: LaidOutNode[] = [];
+  const lanes: LaidOutLane[] = [];
   const anchors = new Map<string, { x: number; y: number }>();
 
-  const depths = [...columns.keys()].sort((a, b) => a - b);
-  // Column height is set by the tallest column, so rows line up across columns.
-  let maxStack = 0;
-  for (const d of depths) {
-    const list = columns.get(d) ?? [];
-    const total = list.reduce((sum, n) => sum + HEADER + n.columns.length * ROW + 6 + ROW_GAP, 0);
-    maxStack = Math.max(maxStack, total);
+  const cardH = (n: SchemaNode) => HEADER + n.columns.length * ROW + 6;
+  const contentW = PER_ROW * NODE_W + (PER_ROW - 1) * NODE_GAP;
+  const laneX = PAD + LANE_LABEL_W;
+  let y = PAD;
+  let maxX = laneX + contentW;
+
+  for (const label of LANE_ORDER) {
+    const list = byLane.get(label);
+    if (!list || list.length === 0) continue;
+
+    // Split into rows, and size each row to its tallest card.
+    const rows: SchemaNode[][] = [];
+    for (let i = 0; i < list.length; i += PER_ROW) rows.push(list.slice(i, i + PER_ROW));
+    const rowHeights = rows.map((r) => Math.max(...r.map(cardH)));
+    const inner = rowHeights.reduce((sum, h) => sum + h, 0) + (rows.length - 1) * ROW_GAP;
+    const laneH = LANE_PAD_TOP + inner + LANE_PAD_BOTTOM;
+
+    lanes.push({ label, x: PAD, y, width: contentW + LANE_LABEL_W + 12, height: laneH });
+
+    let ry = y + LANE_PAD_TOP;
+    rows.forEach((row, ri) => {
+      // Centre each row's cards inside the lane width.
+      const used = row.length * NODE_W + (row.length - 1) * NODE_GAP;
+      let rx = laneX + Math.max(0, (contentW - used) / 2);
+      for (const n of row) {
+        nodes.push({ name: n.name, rows: n.rows, columns: n.columns, x: rx, y: ry, width: NODE_W });
+        n.columns.forEach((c, i) => {
+          const cy = ry + HEADER + i * ROW + ROW / 2;
+          anchors.set(`R:${n.name}.${c.name}`, { x: rx + NODE_W, y: cy });
+          anchors.set(`L:${n.name}.${c.name}`, { x: rx, y: cy });
+        });
+        rx += NODE_W + NODE_GAP;
+      }
+      ry += rowHeights[ri] + ROW_GAP;
+    });
+
+    maxX = Math.max(maxX, laneX + contentW);
+    y += laneH + LANE_GAP;
   }
 
-  let maxX = 0;
-  for (const d of depths) {
-    const list = columns.get(d) ?? [];
-    const x = PAD + d * (NODE_W + COL_GAP);
-    maxX = Math.max(maxX, x + NODE_W);
-    let y = PAD;
-    for (const n of list) {
-      const height = HEADER + n.columns.length * ROW + 6;
-      nodes.push({ name: n.name, rows: n.rows, columns: n.columns, x, y, width: NODE_W });
-
-      // Anchor each column at its row centre. Two anchors per column: the
-      // right edge (edges leave here) and the left edge (edges arrive here).
-      n.columns.forEach((c, i) => {
-        const cy = y + HEADER + i * ROW + ROW / 2;
-        anchors.set(`R:${n.name}.${c.name}`, { x: x + NODE_W, y: cy });
-        anchors.set(`L:${n.name}.${c.name}`, { x, y: cy });
-      });
-      y += height + ROW_GAP;
-    }
-  }
-
-  return { nodes, anchors, width: maxX + PAD, height: Math.max(maxStack + PAD * 2, 620) };
+  return {
+    nodes,
+    lanes,
+    anchors,
+    width: maxX + PAD,
+    height: Math.max(y - LANE_GAP + PAD, 400),
+  };
 }

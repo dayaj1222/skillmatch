@@ -126,9 +126,19 @@ export interface ProjectInput {
 
 // ---- schema lab ----
 
+export interface SchemaColumn {
+  name: string;
+  type: string;
+  nullable: boolean;
+  is_primary_key: boolean;
+  is_foreign_key: boolean;
+  references: string | null;
+}
+
 export interface TableStats {
   name: string;
   rows: number;
+  columns: SchemaColumn[];
 }
 
 export interface SchemaConstraint {
@@ -143,15 +153,6 @@ export interface SchemaTrigger {
   table: string;
   timing: string;
   event: string;
-}
-
-export interface SchemaColumn {
-  name: string;
-  type: string;
-  nullable: boolean;
-  is_primary_key: boolean;
-  is_foreign_key: boolean;
-  references: string | null;
 }
 
 export interface SchemaNode {

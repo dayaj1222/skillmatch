@@ -25,23 +25,17 @@ from ..schemas import (
 
 router = APIRouter(prefix="/api/schema", tags=["schema"])
 
-# Fixed list. Identifiers are never taken from user input.
-TABLES = [
-    "users",
-    "profiles",
-    "skill_categories",
-    "skills",
-    "user_skills",
-    "endorsements",
-    "projects",
-    "project_skills",
-    "applications",
-    "memberships",
-    "project_updates",
-    "tasks",
-    "project_comments",
-    "activity",
-]
+# Tables come from the catalog, never from a list in this file. A table added
+# by a migration appears here on the next request; a dropped one disappears.
+TABLES_SQL = text(
+    """
+    SELECT c.relname AS name
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relkind = 'r'
+    ORDER BY c.relname
+    """
+)
 
 KIND_LABEL = {
     "p": "PRIMARY KEY",
@@ -55,10 +49,21 @@ KIND_LABEL = {
 
 @router.get("", response_model=SchemaOut)
 def schema_overview(db: Session = Depends(get_db)) -> SchemaOut:
+    # Names come from the catalog and are quoted before interpolation, so this
+    # stays a fixed-shape query. Nothing here trusts user input.
+    table_names = [r.name for r in db.execute(TABLES_SQL).all()]
     tables: list[TableStatsOut] = []
-    for name in TABLES:
-        count = db.execute(text(f"SELECT count(*) FROM {name}")).scalar() or 0
+    for name in table_names:
+        quoted = '"' + name.replace('"', '""') + '"'
+        count = db.execute(text(f"SELECT count(*) FROM {quoted}")).scalar() or 0
         tables.append(TableStatsOut(name=name, rows=int(count)))
+
+    # Columns are resolved once here and attached to every table, then reused by
+    # the graph below. Two callers, one catalog read.
+    edges, fk_sources = _fk_edges(db)
+    columns_by_table = _columns(db, [t.name for t in tables], fk_sources)
+    for t in tables:
+        t.columns = columns_by_table.get(t.name, [])
 
     constraint_rows = db.execute(
         text(
@@ -114,27 +119,22 @@ def schema_overview(db: Session = Depends(get_db)) -> SchemaOut:
         db.execute(text("SELECT count(*) FROM pg_indexes WHERE schemaname = 'public'")).scalar()
         or 0
     )
-    fk_count = sum(1 for c in constraints if c.kind == "FOREIGN KEY")
 
     return SchemaOut(
         tables=tables,
         constraints=constraints,
         triggers=triggers,
         indexes=int(indexes),
-        fk_count=fk_count,
-        graph=_graph(db, tables),
+        fk_count=len(edges),
+        graph=SchemaGraphOut(
+            nodes=[TableNodeOut(name=t.name, rows=t.rows, columns=t.columns) for t in tables],
+            edges=edges,
+        ),
     )
 
 
-def _graph(db: Session, tables: list[TableStatsOut]) -> SchemaGraphOut:
-    """Build the relational graph the schema page draws.
-
-    Nodes are tables with their columns; edges are the real foreign keys from
-    ``pg_constraint``. Nothing about the shape is hardcoded, so the graph
-    cannot drift from the database.
-    """
-    row_counts = {t.name: t.rows for t in tables}
-
+def _fk_edges(db: Session) -> tuple[list[ForeignKeyEdge], set[tuple[str, str]]]:
+    """Every foreign key, plus the set of (table, column) pairs that are one."""
     # Every FK: which table.column points at which table.column.
     fk_rows = db.execute(
         text(
@@ -174,7 +174,13 @@ def _graph(db: Session, tables: list[TableStatsOut]) -> SchemaGraphOut:
                 target_column=r.target_column,
             )
         )
+    return edges, fk_sources
 
+
+def _columns(
+    db: Session, table_names: list[str], fk_sources: set[tuple[str, str]]
+) -> dict[str, list[ColumnOut]]:
+    """Columns in ordinal order, with primary- and foreign-key flags."""
     # Primary-key columns, so the graph can mark them.
     pk_rows = db.execute(
         text(
@@ -203,7 +209,7 @@ def _graph(db: Session, tables: list[TableStatsOut]) -> SchemaGraphOut:
         )
     ).all()
 
-    columns_by_table: dict[str, list[ColumnOut]] = {t.name: [] for t in tables}
+    columns_by_table: dict[str, list[ColumnOut]] = {name: [] for name in table_names}
     for r in col_rows:
         if r.table_name not in columns_by_table:
             continue
@@ -216,9 +222,5 @@ def _graph(db: Session, tables: list[TableStatsOut]) -> SchemaGraphOut:
                 is_foreign_key=(r.table_name, r.column_name) in fk_sources,
             )
         )
+    return columns_by_table
 
-    nodes = [
-        TableNodeOut(name=t.name, rows=row_counts.get(t.name, 0), columns=columns_by_table[t.name])
-        for t in tables
-    ]
-    return SchemaGraphOut(nodes=nodes, edges=edges)
