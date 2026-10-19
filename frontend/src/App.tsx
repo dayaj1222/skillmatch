@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { AppShell } from "./components/AppShell";
 import { SkeletonRows } from "./components/ui";
 import { useAuth } from "./lib/auth";
+import { HomePage } from "./pages/Home";
 import { LoginPage } from "./pages/Login";
 import { RegisterPage } from "./pages/Register";
 import { SearchPage } from "./pages/Search";
@@ -39,7 +40,7 @@ export function App() {
   return (
     <Routes>
       <Route element={<AppShell />}>
-        <Route index element={<SearchPage />} />
+        <Route index element={<HomePage />} />
         <Route path="search" element={<SearchPage />} />
         <Route path="people" element={<SearchPage />} />
         <Route path="projects" element={<ProjectsPage />} />

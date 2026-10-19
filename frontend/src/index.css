@@ -329,6 +329,23 @@
     background: var(--color-paper);
   }
 
+  /* Drafting-paper grid for the dark hero. Hairlines only, faded out —
+     it gives the panel depth without a gradient wash. */
+  .hero-grid {
+    background-image:
+      repeating-linear-gradient(
+        to right,
+        color-mix(in srgb, var(--color-inverse) 8%, transparent) 0 1px,
+        transparent 1px 56px
+      ),
+      repeating-linear-gradient(
+        to bottom,
+        color-mix(in srgb, var(--color-inverse) 8%, transparent) 0 1px,
+        transparent 1px 56px
+      );
+    mask-image: linear-gradient(to bottom right, #000 10%, transparent 78%);
+  }
+
   /* The instrument: the one panel on a page that is a set of controls.
      Tinted ground, no hard border, so it reads as a tool distinct from the
      content it filters. Used for search on the directory pages. */

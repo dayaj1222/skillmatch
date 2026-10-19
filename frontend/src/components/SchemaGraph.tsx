@@ -97,7 +97,6 @@ export function SchemaGraph({ graph }: { graph: Graph }) {
         </svg>
         </div>
       </div>
-    </div>
   );
 }
 
