@@ -339,9 +339,21 @@ class SkillDetailOut(BaseModel):
 # ---------- schema / lab page ----------
 
 
+class ColumnOut(BaseModel):
+    name: str
+    type: str
+    nullable: bool
+    is_primary_key: bool
+    is_foreign_key: bool
+    references: str | None = None  # "table.column" the FK points at
+
+
 class TableStatsOut(BaseModel):
     name: str
     rows: int
+    # Columns live here so a caller that only wants to draw the tables does not
+    # have to reach into graph.nodes to find them.
+    columns: list[ColumnOut] = Field(default_factory=list)
 
 
 class ConstraintOut(BaseModel):
@@ -356,15 +368,6 @@ class TriggerOut(BaseModel):
     table: str
     timing: str
     event: str
-
-
-class ColumnOut(BaseModel):
-    name: str
-    type: str
-    nullable: bool
-    is_primary_key: bool
-    is_foreign_key: bool
-    references: str | None = None  # "table.column" the FK points at
 
 
 class ForeignKeyEdge(BaseModel):
