@@ -13,6 +13,7 @@ create nothing. Instead we mutate the existing module's ``engine`` and
 from __future__ import annotations
 
 import os
+import tempfile
 
 import psycopg
 import pytest
@@ -24,6 +25,20 @@ TEST_URL = f"postgresql+psycopg://daya@127.0.0.1:5433/{TEST_DB}"
 # Point the app at the throwaway database before anything imports settings.
 os.environ["SKILLMATCH_DATABASE_URL"] = TEST_URL
 os.environ["SKILLMATCH_SECRET"] = "test-secret"
+
+# Tests must not be swayed by the developer's .env. Environment variables beat
+# the dotenv file in pydantic-settings, so clearing these here keeps the
+# "provider not configured" behaviour deterministic regardless of local setup.
+for _var in (
+    "SKILLMATCH_GITHUB_CLIENT_ID",
+    "SKILLMATCH_GITHUB_CLIENT_SECRET",
+    "SKILLMATCH_GOOGLE_CLIENT_ID",
+    "SKILLMATCH_GOOGLE_CLIENT_SECRET",
+):
+    os.environ[_var] = ""
+
+# Uploads go to a scratch directory so tests never touch repo files.
+os.environ["SKILLMATCH_UPLOAD_DIR"] = tempfile.mkdtemp(prefix="skillmatch-avatars-")
 
 
 @pytest.fixture(autouse=True)
