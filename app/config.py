@@ -30,9 +30,32 @@ class Settings(BaseSettings):
     # Echo SQL to stdout; useful when demonstrating queries.
     sql_echo: bool = False
 
+    # Where uploaded avatars live. Kept outside the SPA build output so
+    # rebuilding the frontend never deletes people's pictures.
+    upload_dir: str = "var/avatars"
+
+    # Public base URL of the backend (used to build OAuth callbacks).
+    public_base_url: str = "http://127.0.0.1:8766"
+
+    # Where to send the browser after an OAuth round-trip.
+    frontend_base_url: str = "http://127.0.0.1:5173"
+
+    # OAuth providers. A provider is offered only when both values are set.
+    github_client_id: str = ""
+    github_client_secret: str = ""
+    google_client_id: str = ""
+    google_client_secret: str = ""
+
     @property
     def is_test(self) -> bool:
         return self.database_url.endswith("_test") or "test" in self.database_url
+
+    def oauth_configured(self, provider: str) -> bool:
+        if provider == "github":
+            return bool(self.github_client_id and self.github_client_secret)
+        if provider == "google":
+            return bool(self.google_client_id and self.google_client_secret)
+        return False
 
 
 @lru_cache

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Plus, SealCheck, Trash } from "@phosphor-icons/react";
+import { Camera, Gift, Plus, SealCheck, Trash } from "@phosphor-icons/react";
 
+import { TipDialog } from "../components/TipDialog";
 import { Empty, ErrorNote, LevelTicks, NumberInput, SectionHead, Select, SkillCombo, Skeleton, SkeletonRows } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import type { Profile, ProfileSkill, Project, PublicProfile, Skill } from "../lib/types";
+import type { Profile, ProfileSkill, Project, PublicProfile, Skill, TipSummary } from "../lib/types";
 
 /**
  * Profile page.
@@ -102,13 +103,7 @@ function ProfileHeader({
   return (
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div className="flex items-start gap-4 min-w-0">
-        {profile.avatar_url && (
-          <img
-            src={profile.avatar_url}
-            alt={profile.username}
-            className="h-16 w-16 rounded-full object-cover border border-rule"
-          />
-        )}
+        <ProfileAvatar profile={profile} />
         <div className="min-w-0">
         <h1 className="display text-[1.75rem]">
           {profile.full_name || profile.username}
@@ -117,6 +112,11 @@ function ProfileHeader({
           @{profile.username}
           {meta ? ` · ${meta}` : ""}
         </p>
+        {profile.hourly_rate != null && (
+          <p className="tnum mt-1 text-[0.875rem] font-medium text-ink">
+            ₹{Number(profile.hourly_rate).toLocaleString("en-IN")}/hr
+          </p>
+        )}
         {profile.headline && (
           <p className="mt-2 max-w-[60ch] text-[0.9375rem] text-muted">
             {profile.headline}
@@ -142,6 +142,32 @@ function ProfileHeader({
       ) : (
         <InviteButton username={profile.username} />
       )}
+    </div>
+  );
+}
+
+function ProfileAvatar({ profile }: { profile: PublicProfile }) {
+  const [broken, setBroken] = useState(false);
+  const initials = (profile.full_name || profile.username)
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  if (profile.avatar_url && !broken) {
+    return (
+      <img
+        src={profile.avatar_url}
+        alt={profile.username}
+        onError={() => setBroken(true)}
+        className="h-16 w-16 shrink-0 rounded-full border border-rule object-cover"
+      />
+    );
+  }
+  return (
+    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-rule bg-ink text-[1.1rem] font-semibold text-inverse">
+      {initials || "?"}
     </div>
   );
 }
@@ -315,6 +341,8 @@ function ReadOnlyProfile({
 }) {
   const [skillModalOpen, setSkillModalOpen] = useState(false);
   const [projects, setProjects] = useState<{ ongoing: Project[]; finished: Project[] } | null>(null);
+  const [tips, setTips] = useState<TipSummary | null>(null);
+  const [tipProject, setTipProject] = useState<Project | null>(null);
 
   useEffect(() => {
     api
@@ -322,6 +350,14 @@ function ReadOnlyProfile({
       .then(setProjects)
       .catch(() => setProjects({ ongoing: [], finished: [] }));
   }, [profile.username]);
+
+  useEffect(() => {
+    if (!isMe) return;
+    api
+      .receivedTips()
+      .then(setTips)
+      .catch(() => setTips(null));
+  }, [isMe]);
 
   const emailTeam = async (projectId: number) => {
     try {
@@ -343,6 +379,32 @@ function ReadOnlyProfile({
           <p className="max-w-[65ch] whitespace-pre-wrap text-[0.9375rem] leading-relaxed text-muted">
             {profile.bio}
           </p>
+        </div>
+      )}
+
+      {isMe && tips && (
+        <div>
+          <SectionHead title="Tips received" meta="Private — only you can see this." />
+          <div className="flex flex-wrap items-end gap-x-8 gap-y-2 px-4 py-4">
+            <div>
+              <p className="tnum display text-[1.75rem]">
+                ₹{tips.total.toLocaleString("en-IN", { minimumFractionDigits: 0 })}
+              </p>
+              <p className="text-[0.8125rem] text-faint">
+                from {tips.count} paid {tips.count === 1 ? "tip" : "tips"}
+              </p>
+            </div>
+            {tips.tips.length > 0 && (
+              <ul className="min-w-[14rem] flex-1 space-y-1 text-[0.8125rem] text-muted">
+                {tips.tips.slice(0, 4).map((t) => (
+                  <li key={t.id} className="flex items-center justify-between gap-3">
+                    <span>@{t.payer_username}</span>
+                    <span className="tnum">₹{Number(t.amount).toLocaleString("en-IN")}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       )}
 
@@ -370,8 +432,8 @@ function ReadOnlyProfile({
                 : "This person has not added any skills yet."
             }
             action={
-              isMe ? (
-                <button type="button" onClick={() => setSkillModalOpen(true)} className="btn btn-secondary">
+              isMe && onToggleEdit ? (
+                <button type="button" onClick={onToggleEdit} className="btn btn-secondary">
                   Add skills
                 </button>
               ) : null
@@ -408,9 +470,25 @@ function ReadOnlyProfile({
                   {p.status} · {p.member_count}/{p.capacity}
                 </span>
                 {isMe && (
-                  <button type="button" onClick={() => void emailTeam(p.id)} className="btn btn-secondary h-7 px-2 text-[0.8125rem]">
-                    Email team
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {p.owner_username === profile.username && (
+                      <button
+                        type="button"
+                        onClick={() => setTipProject(p)}
+                        className="btn btn-secondary h-7 px-2 text-[0.8125rem]"
+                      >
+                        <Gift size={13} weight="bold" />
+                        Tip teammate
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void emailTeam(p.id)}
+                      className="btn btn-secondary h-7 px-2 text-[0.8125rem]"
+                    >
+                      Email team
+                    </button>
+                  </div>
                 )}
               </li>
             ))}
@@ -448,6 +526,14 @@ function ReadOnlyProfile({
             setSkillModalOpen(false);
             onChanged();
           }}
+        />
+      )}
+
+      {tipProject && (
+        <TipDialog
+          projectId={tipProject.id}
+          projectTitle={tipProject.title}
+          onClose={() => setTipProject(null)}
         />
       )}
     </div>
@@ -647,16 +733,27 @@ function EditProfile({ profile, onSaved }: { profile: Profile; onSaved: () => vo
         {error && <ErrorNote message={error} />}
 
         <div>
-          <label htmlFor="avatar" className="field-label">
-            Profile picture
-          </label>
-          <input
-            id="avatar"
-            type="file"
-            accept="image/*"
-            onChange={(e) => setAvatarFile(e.target.files?.[0] ?? null)}
-            className="field-input"
-          />
+          <span className="field-label">Profile picture</span>
+          <div className="mt-1 flex flex-wrap items-center gap-4">
+            <AvatarPreview current={form.avatar_url} file={avatarFile} />
+            <div>
+              <label htmlFor="avatar" className="btn btn-secondary cursor-pointer">
+                <Camera size={15} weight="bold" />
+                {avatarFile ? "Choose another" : "Upload photo"}
+              </label>
+              <input
+                id="avatar"
+                type="file"
+                accept="image/png,image/jpeg,image/gif,image/webp"
+                className="sr-only"
+                onChange={(e) => setAvatarFile(e.target.files?.[0] ?? null)}
+              />
+              <p className="field-help mt-1">
+                JPG, PNG, GIF or WebP · up to 5 MB.
+                {avatarFile ? ` Selected: ${avatarFile.name}` : ""}
+              </p>
+            </div>
+          </div>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -785,6 +882,38 @@ function EditProfile({ profile, onSaved }: { profile: Profile; onSaved: () => vo
       </form>
 
       {user && <SkillEditor onSaved={onSaved} />}
+    </div>
+  );
+}
+
+function AvatarPreview({ current, file }: { current: string | null; file: File | null }) {
+  const [url, setUrl] = useState<string | null>(current);
+  const [broken, setBroken] = useState(false);
+
+  useEffect(() => {
+    if (!file) {
+      setUrl(current);
+      setBroken(false);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(file);
+    setUrl(objectUrl);
+    setBroken(false);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [file, current]);
+
+  return (
+    <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border border-rule bg-rule/20">
+      {url && !broken ? (
+        <img
+          src={url}
+          alt="Profile preview"
+          onError={() => setBroken(true)}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <Camera size={26} className="text-faint" />
+      )}
     </div>
   );
 }

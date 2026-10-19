@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.11"
 
 [[package]]
@@ -616,6 +616,18 @@ wheels = [
 ]
 
 [[package]]
+name = "qrcode"
+version = "8.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8f/b2/7fc2931bfae0af02d5f53b174e9cf701adbb35f39d69c2af63d4a39f81a9/qrcode-8.2.tar.gz", hash = "sha256:35c3f2a4172b33136ab9f6b3ef1c00260dd2f66f858f24d88418a015f446506c", size = 43317, upload-time = "2025-05-01T15:44:24.726Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/dd/b8/d2d6d731733f51684bbf76bf34dab3b70a9148e8f2cef2bb544fccec681a/qrcode-8.2-py3-none-any.whl", hash = "sha256:16e64e0716c14960108e85d853062c9e8bba5ca8252c0b4d0231b9df4060ff4f", size = 45986, upload-time = "2025-05-01T15:44:22.781Z" },
+]
+
+[[package]]
 name = "ruff"
 version = "0.16.10"
 source = { registry = "https://pypi.org/simple" }
@@ -648,18 +660,19 @@ dependencies = [
     { name = "bcrypt" },
     { name = "email-validator" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "itsdangerous" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "python-multipart" },
+    { name = "qrcode" },
     { name = "sqlalchemy" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.dev-dependencies]
 dev = [
-    { name = "httpx" },
     { name = "pytest" },
     { name = "ruff" },
 ]
@@ -669,18 +682,19 @@ requires-dist = [
     { name = "bcrypt", specifier = ">=4.2" },
     { name = "email-validator", specifier = ">=2.2" },
     { name = "fastapi", specifier = ">=0.115" },
+    { name = "httpx", specifier = ">=0.27" },
     { name = "itsdangerous", specifier = ">=2.2" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "pydantic", specifier = ">=2.9" },
     { name = "pydantic-settings", specifier = ">=2.6" },
     { name = "python-multipart", specifier = ">=0.0.12" },
+    { name = "qrcode", specifier = ">=7.4" },
     { name = "sqlalchemy", specifier = ">=2.0.36" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "httpx", specifier = ">=0.27" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "ruff", specifier = ">=0.7" },
 ]

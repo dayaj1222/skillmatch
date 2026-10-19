@@ -524,10 +524,17 @@ class Transaction(Base):
     )
     amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(6), nullable=False, server_default=text("'INR'"))
+    # PROJECT payments settle a project; TIPs are discretionary thank-yous.
+    kind: Mapped[str] = mapped_column(
+        String(8), nullable=False, server_default=text("'PROJECT'")
+    )
     status: Mapped[str] = mapped_column(
         String(10), nullable=False, server_default=text("'PENDING'")
     )
     upi_txn_id: Mapped[str | None] = mapped_column(String(120))
+    # HMAC over the payment facts, so a tip note shown to the payee can be
+    # checked against tampering.
+    signature: Mapped[str | None] = mapped_column(String(128))
     note: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -537,9 +544,30 @@ class Transaction(Base):
     __table_args__ = (
         CheckConstraint("payer_id <> payee_id", name="ck_transaction_not_self"),
         CheckConstraint("amount >= 0", name="ck_transaction_amount"),
+        CheckConstraint("kind IN ('PROJECT','TIP')", name="ck_transaction_kind"),
         CheckConstraint(
             "status IN ('PENDING','PAID','FAILED','CANCELLED')", name="ck_transaction_status"
         ),
+    )
+
+
+class OAuthAccount(Base):
+    """Links a third-party identity (GitHub/Google) to a local user."""
+
+    __tablename__ = "oauth_accounts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)
+    subject: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint("provider", "subject", name="uq_oauth_provider_subject"),
     )
 
 
@@ -643,6 +671,7 @@ __all__ = [
     "Follow",
     "Membership",
     "Message",
+    "OAuthAccount",
     "Profile",
     "Project",
     "ProjectComment",

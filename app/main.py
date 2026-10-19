@@ -17,6 +17,7 @@ from .routers import (
     dashboard,
     follows,
     messages,
+    oauth,
     payments,
     profiles,
     projects,
@@ -27,7 +28,9 @@ from .routers import (
     skill_assessments,
     skills,
     tasks,
+    tips,
 )
+from .uploads import avatar_dir
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
@@ -41,6 +44,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="SkillMatch", version="0.2.0", lifespan=lifespan)
 
 app.include_router(auth.router)
+app.include_router(oauth.router)
 app.include_router(profiles.router)
 app.include_router(skills.router)
 app.include_router(search.router)
@@ -56,6 +60,7 @@ app.include_router(payments.router)
 app.include_router(ratings.router)
 app.include_router(reports.router)
 app.include_router(skill_assessments.router)
+app.include_router(tips.router)
 
 
 @app.get("/api/health")
@@ -63,19 +68,16 @@ def health() -> dict:
     return {"status": "ok"}
 
 
+# Avatars live outside the SPA build output and are always served.
+app.mount("/avatars", StaticFiles(directory=avatar_dir()), name="avatars")
+
 if STATIC_DIR.is_dir():
-    app.mount(
-        "/assets",
-        StaticFiles(directory=STATIC_DIR / "assets"),
-        name="assets",
-    )
-    avatars_dir = STATIC_DIR / "avatars"
-    avatars_dir.mkdir(parents=True, exist_ok=True)
-    app.mount(
-        "/avatars",
-        StaticFiles(directory=avatars_dir),
-        name="avatars",
-    )
+    if (STATIC_DIR / "assets").is_dir():
+        app.mount(
+            "/assets",
+            StaticFiles(directory=STATIC_DIR / "assets"),
+            name="assets",
+        )
 
     @app.get("/{full_path:path}")
     def spa(full_path: str) -> FileResponse:

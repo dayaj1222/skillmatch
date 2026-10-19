@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
+import { OAuthButtons } from "../components/OAuthButtons";
 import { ErrorNote } from "../components/ui";
 import { useAuth } from "../lib/auth";
 
@@ -111,6 +112,8 @@ export function LoginPage() {
           {busy ? "Signing in..." : "Sign in"}
         </button>
       </form>
+
+      <OAuthButtons next={from} />
     </AuthLayout>
   );
 }

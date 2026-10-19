@@ -181,3 +181,49 @@ export interface SchemaOverview {
   fk_count: number;
   graph: SchemaGraph;
 }
+
+// ---- payments / tips ----
+
+export type TransactionKind = "PROJECT" | "TIP";
+export type TransactionStatus = "PENDING" | "PAID" | "FAILED" | "CANCELLED";
+
+export interface Transaction {
+  id: number;
+  project_id: number | null;
+  payer_id: number;
+  payer_username: string;
+  payee_id: number;
+  payee_username: string;
+  amount: number;
+  currency: string;
+  kind: TransactionKind;
+  status: TransactionStatus;
+  upi_txn_id: string | null;
+  signature: string | null;
+  note: string | null;
+  created_at: string;
+  paid_at: string | null;
+}
+
+export interface Tip {
+  id: number;
+  project_id: number | null;
+  payer_username: string;
+  payee_username: string;
+  amount: number;
+  currency: string;
+  status: TransactionStatus;
+  signature: string | null;
+  upi_link: string;
+  qr_svg: string;
+  note: string | null;
+  created_at: string;
+}
+
+export interface TipSummary {
+  total: number;
+  count: number;
+  tips: Transaction[];
+}
+
+export type OAuthProvider = "github" | "google";

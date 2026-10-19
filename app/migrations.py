@@ -100,6 +100,27 @@ def _activity_kinds(engine: Engine) -> None:
         )
 
 
+def _payment_tips(engine: Engine) -> None:
+    """Add ``kind``/``signature`` to transactions for discretionary tips."""
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "ALTER TABLE transactions "
+                "ADD COLUMN IF NOT EXISTS kind varchar(8) NOT NULL DEFAULT 'PROJECT'"
+            )
+        )
+        conn.execute(
+            text("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS signature varchar(128)")
+        )
+        conn.execute(text("ALTER TABLE transactions DROP CONSTRAINT IF EXISTS ck_transaction_kind"))
+        conn.execute(
+            text(
+                "ALTER TABLE transactions ADD CONSTRAINT ck_transaction_kind "
+                "CHECK (kind IN ('PROJECT','TIP'))"
+            )
+        )
+
+
 def _triggers(engine: Engine) -> None:
     """Install the PL/pgSQL invariants and activity-feed writers."""
     from .triggers import install_triggers
@@ -114,7 +135,8 @@ MIGRATIONS: list[tuple[str, Callable[[Engine], None]]] = [
     ("0003_initiated_by", _initiated_by),
     ("0004_profile_extras", _profile_extras),
     ("0005_activity_kinds", _activity_kinds),
-    ("0006_triggers", _triggers),
+    ("0006_payment_tips", _payment_tips),
+    ("0007_triggers", _triggers),
 ]
 
 

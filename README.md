@@ -14,7 +14,7 @@ Postgres.
 
 - **Postgres 16+** — `citext` for case-insensitive skill dedupe, `pg_trgm` for text search
 - **FastAPI** + **SQLAlchemy 2.0** (typed ORM) + **psycopg 3**
-- **pytest** — 43 tests, throwaway database per test
+- **pytest** — 82 tests, throwaway database per test
 
 ## Run
 
@@ -37,7 +37,7 @@ Open http://127.0.0.1:8766/ — interactive API docs at `/docs`.
 ## Test
 
 ```bash
-uv run pytest        # 43 passed
+uv run pytest        # 82 passed
 uv run ruff check .  # clean
 ```
 
@@ -46,7 +46,8 @@ per test, so your dev data is never touched.
 
 ## The schema
 
-Eleven tables. Every rule that can be a constraint *is* a constraint.
+Every rule that can be a constraint *is* a constraint. The core team-forming
+tables:
 
 ```
 users ──1:1── profiles
@@ -98,9 +99,14 @@ and the partial index.
 | `POST` | `/api/auth/login` | username **or** email |
 | `POST` | `/api/auth/logout` | clears the session cookie |
 | `GET` | `/api/auth/me` | current user, or 401 |
+| `GET` | `/api/auth/oauth/providers` | providers with credentials configured |
+| `GET` | `/api/auth/oauth/{provider}/login` | start GitHub/Google OAuth |
+| `GET` | `/api/auth/oauth/{provider}/callback` | set the session and return to the SPA |
 | `GET`/`PUT` | `/api/profile` | your own profile |
+| `POST` | `/api/profile/avatar` | upload a profile picture (≤ 5 MB) |
 | `PUT` | `/api/profile/skills` | replace your skill set atomically |
 | `GET` | `/api/profile/{username}` | public profile (no email) |
+| `GET` | `/api/profile/{username}/projects` | ongoing / finished projects |
 | `POST`/`DELETE` | `/api/profile/{username}/endorse/{skill_id}` | endorse / un-endorse |
 | `GET` | `/api/skills` | vocabulary + how many people have each |
 | `GET` | `/api/skills/categories` | skill categories |
@@ -113,7 +119,13 @@ and the partial index.
 | `DELETE` | `/api/projects/{id}/members/me` | leave the team |
 | `POST` | `/api/projects/{id}/members/{username}/promote` | transfer leadership |
 | `POST` | `/api/projects/{id}/close` | close the project |
+| `GET` | `/api/projects/{id}/team-emails` | member emails (team only) |
+| `GET` | `/api/projects/{id}/skill-match` | matched / missing / below-level skills |
 | `POST` | `/api/projects/{id}/updates` | post an update (members only) |
+| `POST` | `/api/tips` | create a tip; returns a signed UPI link + QR |
+| `POST` | `/api/tips/{id}/confirm` | payer marks the tip paid |
+| `GET` | `/api/tips/received` | your own tip income (private) |
+| `GET` | `/api/tips/sent` | tips you have sent |
 
 ## The lifecycle
 
@@ -151,9 +163,18 @@ restricts to full coverage.
 | Env var | Default | Purpose |
 |---|---|---|
 | `SKILLMATCH_DATABASE_URL` | `postgresql+psycopg://.../skillmatch` | database URL |
-| `SKILLMATCH_SECRET` | dev placeholder | signs session cookies — **set in production** |
+| `SKILLMATCH_SECRET` | dev placeholder | signs session cookies and tip references — **set in production** |
 | `SKILLMATCH_COOKIE_SECURE` | off | set to `1` over HTTPS |
 | `SKILLMATCH_SQL_ECHO` | off | log SQL, useful for demonstrating queries |
+| `SKILLMATCH_UPLOAD_DIR` | `var/avatars` | avatar storage, kept out of the SPA build |
+| `SKILLMATCH_PUBLIC_BASE_URL` | `http://127.0.0.1:8766` | backend base, used to build OAuth callbacks |
+| `SKILLMATCH_FRONTEND_BASE_URL` | `http://127.0.0.1:5173` | where OAuth returns the browser |
+| `SKILLMATCH_GITHUB_CLIENT_ID` / `_SECRET` | empty | enables GitHub login when both are set |
+| `SKILLMATCH_GOOGLE_CLIENT_ID` / `_SECRET` | empty | enables Google login when both are set |
+
+Copy `.env.example` to `.env` to fill these in. The OAuth buttons only appear
+when the matching provider has both credentials set; the callback URLs are
+`{PUBLIC_BASE_URL}/api/auth/oauth/{github|google}/callback`.
 
 ## Layout
 
@@ -238,5 +259,9 @@ treatment) lives in the `@layer components` classes in the same file:
 - No versioned migrations — `migrations.py` is an ordered, idempotent
   bootstrap (`migrate(engine)`), not Alembic. Add Alembic before the schema
   changes under live data.
-- No rate limiting on login.
+- No rate limiting on login or tip creation.
 - No email verification or password reset.
+- UPI is a *record + QR* flow, not a PSP integration: money moves directly
+  between UPI apps and the payer confirms it. Signature checks detect tampered
+  references but do not settle funds.
+- OAuth needs real client credentials; without them the buttons stay hidden.

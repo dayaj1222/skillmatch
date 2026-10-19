@@ -468,8 +468,10 @@ class TransactionOut(BaseModel):
     payee_username: str
     amount: float
     currency: str
+    kind: str = "PROJECT"
     status: str
     upi_txn_id: str | None = None
+    signature: str | None = None
     note: str | None = None
     created_at: dt.datetime
     paid_at: dt.datetime | None = None
@@ -477,6 +479,41 @@ class TransactionOut(BaseModel):
 
 class UpiLinkOut(BaseModel):
     upi_link: str
+
+
+# ---------- tips ----------
+
+
+class TipIn(BaseModel):
+    payee_username: str = Field(min_length=1, max_length=40)
+    amount: float = Field(gt=0, le=1_000_000)
+    project_id: int | None = None
+    note: str | None = Field(default=None, max_length=120)
+
+
+class TipOut(BaseModel):
+    id: int
+    project_id: int | None = None
+    payer_username: str
+    payee_username: str
+    amount: float
+    currency: str
+    status: str
+    signature: str | None = None
+    upi_link: str
+    qr_svg: str
+    note: str | None = None
+    created_at: dt.datetime
+
+
+class TipSummaryOut(BaseModel):
+    total: float
+    count: int
+    tips: list[TransactionOut] = Field(default_factory=list)
+
+
+class OAuthProvidersOut(BaseModel):
+    providers: list[str] = Field(default_factory=list)
 
 
 # ---------- ratings / reports ----------

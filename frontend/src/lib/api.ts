@@ -8,6 +8,7 @@ import type {
   Applicant,
   ApplicationStatus,
   Member,
+  OAuthProvider,
   Profile,
   ProfileSkill,
   Project,
@@ -18,6 +19,9 @@ import type {
   SchemaOverview,
   Skill,
   SkillCategory,
+  Tip,
+  TipSummary,
+  Transaction,
   User,
 } from "./types";
 
@@ -103,6 +107,13 @@ export const api = {
   logout: () => request<void>("/api/auth/logout", { method: "POST" }),
 
   me: () => request<User>("/api/auth/me"),
+
+  /** Which OAuth buttons should the login/register pages show. */
+  oauthProviders: () => request<{ providers: OAuthProvider[] }>("/api/auth/oauth/providers"),
+
+  /** Full-page URL that starts the OAuth round-trip. */
+  oauthLoginUrl: (provider: OAuthProvider, nextPath = "/") =>
+    `/api/auth/oauth/${provider}/login?next=${encodeURIComponent(nextPath)}`,
 
   // ---- profile ----
   myProfile: () => request<Profile>("/api/profile"),
@@ -247,7 +258,18 @@ export const api = {
   upiLink: (id: number) => request<{ upi_link: string }>(`/api/payments/${id}/upi-link`),
   confirmPayment: (id: number, upi_txn_id?: string) =>
     request<any>(`/api/payments/${id}/confirm`, { method: "POST", body: JSON.stringify({ upi_txn_id }) }),
-  payments: (role = "all") => request<any[]>(`/api/payments?role=${role}`),
+  payments: (role = "all") => request<Transaction[]>(`/api/payments?role=${role}`),
+
+  // ---- tips ----
+  createTip: (body: { payee_username: string; amount: number; project_id?: number; note?: string }) =>
+    request<Tip>("/api/tips", { method: "POST", body: JSON.stringify(body) }),
+  confirmTip: (id: number, upi_txn_id?: string) =>
+    request<Transaction>(`/api/tips/${id}/confirm`, {
+      method: "POST",
+      body: JSON.stringify({ upi_txn_id }),
+    }),
+  receivedTips: () => request<TipSummary>("/api/tips/received"),
+  sentTips: () => request<Transaction[]>("/api/tips/sent"),
 
   // ---- ratings ----
   createRating: (body: { ratee_username: string; project_id?: number; score: number; comment?: string }) =>

@@ -20,6 +20,13 @@ pgdata/
 
 # Frontend build tooling
 frontend/node_modules/
+*.tsbuildinfo
+
+# User uploads (avatars) live outside the build output
+var/
+
+# Playwright MCP browser snapshots
+.playwright-mcp/
 
 # Pi agent task logs
 .pi/

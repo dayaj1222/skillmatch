@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
@@ -27,6 +26,7 @@ from ..skills_service import (
     public_profiles_for,
     replace_user_skills,
 )
+from ..uploads import avatar_dir
 
 router = APIRouter(prefix="/api", tags=["profiles"])
 
@@ -92,15 +92,19 @@ def upload_avatar(
     if profile is None:
         profile = Profile(user_id=user.id)
         db.add(profile)
-    ext = os.path.splitext(file.filename or "")[1].lower() or ".png"
+    filename = file.filename or ""
+    ext = ("." + filename.rsplit(".", 1)[-1].lower()) if "." in filename else ".png"
     if ext not in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
         raise HTTPException(status_code=400, detail="Unsupported image type")
-    upload_dir = os.environ.get("SKILLMATCH_UPLOAD_DIR", "static/avatars")
-    os.makedirs(upload_dir, exist_ok=True)
+    data = file.file.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Image must be 5 MB or smaller")
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    directory = avatar_dir()
     name = f"{user.id}-{uuid.uuid4().hex}{ext}"
-    path = os.path.join(upload_dir, name)
-    with open(path, "wb") as f:
-        f.write(file.file.read())
+    (directory / name).write_bytes(data)
     profile.avatar_url = f"/avatars/{name}"
     db.commit()
     db.refresh(profile)

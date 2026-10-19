@@ -17,6 +17,11 @@ export default defineConfig({
         target: "http://127.0.0.1:8766",
         changeOrigin: true,
       },
+      // Uploaded avatars are served by FastAPI, not by the Vite dev server.
+      "/avatars": {
+        target: "http://127.0.0.1:8766",
+        changeOrigin: true,
+      },
     },
   },
 });

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import { OAuthButtons } from "../components/OAuthButtons";
 import { ErrorNote } from "../components/ui";
 import { useAuth } from "../lib/auth";
 import { AuthLayout } from "./Login";
@@ -123,6 +124,8 @@ export function RegisterPage() {
           {busy ? "Creating account..." : "Create account"}
         </button>
       </form>
+
+      <OAuthButtons next={username ? `/u/${username}` : "/"} />
     </AuthLayout>
   );
 }
