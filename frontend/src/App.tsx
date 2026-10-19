@@ -11,7 +11,6 @@ import { ProfilePage } from "./pages/Profile";
 import { ProjectsPage } from "./pages/Projects";
 import { ProjectDetailPage } from "./pages/ProjectDetail";
 import { ProjectFormPage } from "./pages/ProjectForm";
-import { SchemaPage } from "./pages/Schema";
 import { NotFoundPage } from "./pages/NotFound";
 
 /** Gate a route behind auth without flashing the login screen on first load. */
@@ -46,7 +45,6 @@ export function App() {
         <Route path="projects/new" element={<ProjectFormPage />} />
         <Route path="projects/:id" element={<ProjectDetailPage />} />
         <Route path="projects/:id/edit" element={<ProjectFormPage />} />
-        <Route path="schema" element={<SchemaPage />} />
         <Route
           path="u/:username"
           element={

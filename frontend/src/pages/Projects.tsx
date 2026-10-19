@@ -166,7 +166,7 @@ export function ProjectsPage() {
 
       {!loading && projects && projects.length > 0 && (
         <div>
-          <SectionHead title="Open projects" meta={`${projects.length} listed`} />
+          <SectionHead title="Open projects" />
           <ul className="border-t border-rule">
             {projects.map((p) => (
               <li key={p.id}>
@@ -184,7 +184,7 @@ export function ProjectsPage() {
 
       {user && !loading && (
         <section>
-          <SectionHead title="Your closed projects" meta={`${closedProjects.length} ${closedProjects.length === 1 ? "project" : "projects"}`} />
+          <SectionHead title="Your closed projects" />
           {closedProjects.length === 0 ? (
             <p className="py-4 text-sm text-muted">Projects you close will appear here. You can reopen or delete them anytime.</p>
           ) : (

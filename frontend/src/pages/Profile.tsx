@@ -384,7 +384,7 @@ function ReadOnlyProfile({
 
       {isMe && tips && (
         <div>
-          <SectionHead title="Tips received" meta="Private — only you can see this." />
+          <SectionHead title="Tips received" />
           <div className="flex flex-wrap items-end gap-x-8 gap-y-2 px-4 py-4">
             <div>
               <p className="tnum display text-[1.75rem]">
@@ -409,14 +409,7 @@ function ReadOnlyProfile({
       )}
 
       <div>
-        <SectionHead
-          title="Skills"
-          meta={
-            isMe
-              ? "Counts show how many people vouched for each skill."
-              : "Vouch for a skill you have seen them use."
-          }
-        />
+        <SectionHead title="Skills" />
         {isMe && onToggleEdit && (
           <button type="button" onClick={onToggleEdit} className="btn btn-secondary mb-4">
             <Plus size={14} weight="bold" />
@@ -729,7 +722,7 @@ function EditProfile({ profile, onSaved }: { profile: Profile; onSaved: () => vo
   return (
     <div className="space-y-8">
       <form onSubmit={submit} className="block space-y-4 p-5">
-        <SectionHead title="Your details" meta="Shown on your public profile." />
+        <SectionHead title="Your details" />
         {error && <ErrorNote message={error} />}
 
         <div>
@@ -828,7 +821,7 @@ function EditProfile({ profile, onSaved }: { profile: Profile; onSaved: () => vo
               value={form.contact_link ?? ""}
               onChange={(e) => set("contact_link", e.target.value || null)}
             />
-            <p className="field-help">Where people reach you. Email is never shown.</p>
+            <p className="field-help">Email is never shown.</p>
           </div>
           <div>
             <label htmlFor="upi_id" className="field-label">
@@ -999,10 +992,7 @@ function SkillEditor({ onSaved }: { onSaved: () => void }) {
 
   return (
     <div className="block p-5">
-      <SectionHead
-        title="Skills"
-        meta="Pick from the shared list so two people typing the same skill get one entry."
-      />
+      <SectionHead title="Skills" />
       {error && <ErrorNote message={error} />}
 
       {current.length === 0 ? (

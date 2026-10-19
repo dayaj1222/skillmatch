@@ -80,10 +80,6 @@ export function SearchPage() {
     <div className="space-y-8">
       <div>
         <h1 className="display text-[1.75rem]">Find people</h1>
-        <p className="mt-1 max-w-[58ch] text-sm text-muted">
-          Name the skills a project needs. Results rank by how many of them each person has at
-          the level you ask for.
-        </p>
       </div>
 
       <div className="panel-instrument space-y-5 p-6">

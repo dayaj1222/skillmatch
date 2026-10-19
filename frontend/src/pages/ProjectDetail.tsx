@@ -114,7 +114,7 @@ export function ProjectDetailPage() {
 
       {project.required_skills.length > 0 && (
         <div>
-          <SectionHead title="Needs" meta="minimum level shown" />
+          <SectionHead title="Needs" />
           <ul className="register border-b border-rule">
             {project.required_skills.map((s) => (
               <li
@@ -165,18 +165,11 @@ export function ProjectDetailPage() {
         <div>
           <SectionHead
             title="Applicants"
-            meta={
-              spotsLeft > 0
-                ? `${pendingCount} pending / ${spotsLeft} can be accepted`
-                : `${pendingCount} pending / team full`
-            }
+            meta={`${pendingCount} pending`}
           />
           {project.applicants.length === 0 ? (
             <div className="block p-6">
               <p className="display text-base">No applications yet</p>
-              <p className="mt-2 max-w-[58ch] text-sm text-muted">
-                Nobody has asked to join. Clearer required skills tend to help.
-              </p>
             </div>
           ) : (
             <ul className="register border-b border-rule">
@@ -191,7 +184,7 @@ export function ProjectDetailPage() {
       )}
 
       <div>
-        <SectionHead title="Team" meta={isMember ? "you are on this team" : undefined} />
+        <SectionHead title="Team" />
         <ul className="register border-b border-rule">
           {project.members.map((m) => (
             <li
@@ -265,7 +258,7 @@ export function ProjectDetailPage() {
       </div>
 
       <div>
-        <SectionHead title="Updates" meta={isMember ? "you can post" : undefined} />
+        <SectionHead title="Updates" />
 
         {isMember && <UpdateComposer projectId={projectId} onPosted={load} />}
 
@@ -413,7 +406,7 @@ function InviteForm({ projectId, onInvited }: { projectId: number; onInvited: ()
 
   return (
     <form onSubmit={submit} className="mt-4 block p-4">
-      <SectionHead title="Invite someone" meta="They get a pending request" />
+      <SectionHead title="Invite someone" />
       <div className="mt-4 space-y-4">
         {error && <ErrorNote message={error} />}
         {sent && (

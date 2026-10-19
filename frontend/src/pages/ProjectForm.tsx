@@ -176,13 +176,11 @@ export function ProjectFormPage() {
             value={capacity}
             onChange={setCapacity}
           />
-          <p className="field-help">
-            Including you. The database refuses any acceptance past this number.
-          </p>
+
         </div>
 
         <div className="border-t border-rule pt-5">
-          <SectionHead title="Required skills" meta="What you need, and at what level." />
+          <SectionHead title="Required skills" />
 
           {unused.length > 0 && (
             <div className="mb-4">
@@ -199,7 +197,6 @@ export function ProjectFormPage() {
                   </button>
                 ))}
               </div>
-              <p className="field-help">Set the minimum level once, then add several skills quickly.</p>
             </div>
           )}
 
