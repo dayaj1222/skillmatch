@@ -51,6 +51,14 @@ export function AppShell() {
                 </>
               )}
             </NavLink>
+            <NavLink to="/schema" className={linkClass}>
+              {({ isActive }) => (
+                <>
+                  Schema
+                  {isActive && <NavUnderline />}
+                </>
+              )}
+            </NavLink>
             {user && (
               <NavLink to={`/u/${user.username}`} className={linkClass}>
                 {({ isActive }) => (
