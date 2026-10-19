@@ -52,25 +52,16 @@ export function SchemaGraph({ graph }: { graph: Graph }) {
             </marker>
           </defs>
 
-          {layout.lanes.map((lane) => (
-            <g key={lane.label}>
-              <rect
-                x={lane.x}
-                y={lane.y}
-                width={lane.width}
-                height={lane.height}
-                rx={10}
-                className="fill-surface stroke-rule"
-              />
-              <text
-                x={lane.x + 16}
-                y={lane.y + 22}
-                className="fill-muted"
-                style={{ fontSize: 11, fontWeight: 600, letterSpacing: 0.8 }}
-              >
-                {lane.label.toUpperCase()}
-              </text>
-            </g>
+          {layout.columns.map((col) => (
+            <text
+              key={col.label}
+              x={col.x}
+              y={col.y + 16}
+              className="fill-muted"
+              style={{ fontSize: 11, fontWeight: 600, letterSpacing: 0.8 }}
+            >
+              {col.label}
+            </text>
           ))}
 
           {graph.edges.map((e, i) => {
@@ -194,17 +185,15 @@ interface LaidOutNode {
   width: number;
 }
 
-interface LaidOutLane {
+interface LaidOutColumn {
   label: string;
   x: number;
   y: number;
-  width: number;
-  height: number;
 }
 
 interface Layout {
   nodes: LaidOutNode[];
-  lanes: LaidOutLane[];
+  columns: LaidOutColumn[];
   anchors: Map<string, { x: number; y: number }>;
   minX: number;
   minY: number;
@@ -215,14 +204,10 @@ interface Layout {
 const ROW = 21;
 const HEADER = 30;
 const CARD_W = 232;
-const PER_ROW = 3;
-const CARD_GAP = 26;
-const LANE_W = 1120;
-const LABEL_W = 126;
-const LANE_TOP = 36;
-const LANE_BOTTOM = 18;
-const LANE_GAP = 14;
-const ROW_GAP = 16;
+const PER_COLUMN = 5;
+const COL_GAP = 26;
+const COLUMN_GAP = 60;
+const HEADING_H = 30;
 const TOP = 18;
 const PAD = 24;
 
@@ -253,9 +238,20 @@ const DOMAIN: Record<string, string> = {
 
 const LANE_ORDER = ["Identity", "Skills", "Projects", "Other"];
 
+const COLUMN_LABEL: Record<string, string> = {
+  Identity: "IDENTITY",
+  Skills: "SKILLS",
+  Projects: "PROJECTS",
+  Other: "OTHER",
+};
+
 const cardHeight = (n: SchemaNode) => HEADER + n.columns.length * ROW + 6;
 
-/** Three cards per row, each lane sized to its tallest row. */
+/**
+ * One vertical column per domain, five cards deep. A domain with more than
+ * five tables continues in a numbered column beside it, exactly as the design
+ * study does. Nothing is scaled or cropped: the page scrolls instead.
+ */
 function layoutGraph(graph: Graph): Layout {
   const byLane = new Map<string, SchemaNode[]>();
   for (const n of graph.nodes) {
@@ -267,61 +263,47 @@ function layoutGraph(graph: Graph): Layout {
   for (const list of byLane.values()) list.sort((a, b) => a.name.localeCompare(b.name));
 
   const nodes: LaidOutNode[] = [];
-  const lanes: LaidOutLane[] = [];
+  const columns: LaidOutColumn[] = [];
   const anchors = new Map<string, { x: number; y: number }>();
 
-  const laneX = PAD;
-  const contentX = laneX + LABEL_W;
-  let y = TOP;
+  let x = PAD;
+  let maxRight = PAD;
+  let maxBottom = TOP + HEADING_H;
 
   for (const label of LANE_ORDER) {
     const list = byLane.get(label);
     if (!list || list.length === 0) continue;
 
-    const rows: SchemaNode[][] = [];
-    for (let i = 0; i < list.length; i += PER_ROW) rows.push(list.slice(i, i + PER_ROW));
-    const rowHeights = rows.map((r) => Math.max(...r.map(cardHeight)));
-    let inner = 0;
-    for (const h of rowHeights) inner += h + ROW_GAP;
-    inner -= ROW_GAP;
+    const parts = Math.ceil(list.length / PER_COLUMN);
+    for (let part = 0; part < parts; part++) {
+      const chunk = list.slice(part * PER_COLUMN, (part + 1) * PER_COLUMN);
+      const heading = parts > 1 ? `${COLUMN_LABEL[label]} ${part + 1}` : COLUMN_LABEL[label];
 
-    const laneH = LANE_TOP + inner + LANE_BOTTOM;
-    lanes.push({ label, x: laneX, y, width: LANE_W, height: laneH });
-
-    let ry = y + LANE_TOP;
-    rows.forEach((row, ri) => {
-      const used = row.length * CARD_W + (row.length - 1) * CARD_GAP;
-      const laneInner = LANE_W - LABEL_W;
-      let rx = contentX + Math.max(0, (laneInner - used) / 2);
-      for (const n of row) {
-        nodes.push({
-          name: n.name,
-          rows: n.rows,
-          columns: n.columns,
-          x: rx,
-          y: ry,
-          width: CARD_W,
-        });
+      let y = TOP + HEADING_H;
+      for (const n of chunk) {
+        nodes.push({ name: n.name, rows: n.rows, columns: n.columns, x, y, width: CARD_W });
         n.columns.forEach((c, i) => {
-          const cy = ry + HEADER + 15 + i * ROW - 4;
-          anchors.set(`R:${n.name}.${c.name}`, { x: rx + CARD_W, y: cy });
-          anchors.set(`L:${n.name}.${c.name}`, { x: rx, y: cy });
+          const cy = y + HEADER + 15 + i * ROW - 4;
+          anchors.set(`R:${n.name}.${c.name}`, { x: x + CARD_W, y: cy });
+          anchors.set(`L:${n.name}.${c.name}`, { x, y: cy });
         });
-        rx += CARD_W + CARD_GAP;
+        y += cardHeight(n) + COL_GAP;
       }
-      ry += rowHeights[ri] + ROW_GAP;
-    });
 
-    y += laneH + LANE_GAP;
+      columns.push({ label: heading, x, y: TOP });
+      maxRight = Math.max(maxRight, x + CARD_W);
+      maxBottom = Math.max(maxBottom, y - COL_GAP);
+      x += CARD_W + COLUMN_GAP;
+    }
   }
 
   return {
     nodes,
-    lanes,
+    columns,
     anchors,
-    minX: laneX,
+    minX: PAD,
     minY: TOP,
-    width: LANE_W,
-    height: Math.max(y - LANE_GAP - TOP, 200),
+    width: maxRight - PAD,
+    height: maxBottom - TOP,
   };
 }
