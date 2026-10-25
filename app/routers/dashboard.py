@@ -24,6 +24,7 @@ from ..models import (
     Profile,
     Project,
     Task,
+    Transaction,
     User,
     UserSkill,
 )
@@ -34,6 +35,8 @@ from ..schemas import (
     InviteIn,
     MyApplicationOut,
     MyProjectOut,
+    NotificationOut,
+    NotificationsOut,
     StatsOut,
 )
 
@@ -154,6 +157,71 @@ def my_applications(
         )
         for a, p in rows
     ]
+
+
+@router.get("/notifications", response_model=NotificationsOut)
+def notifications(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> NotificationsOut:
+    """Pending invites and tips waiting on the current user.
+
+    Items clear themselves once resolved: an invite disappears when it is
+    accepted or declined, and a tip disappears once the payer confirms it.
+    """
+    items: list[NotificationOut] = []
+
+    # Pending invites (owner-initiated applications awaiting this user's answer).
+    invite_rows = db.execute(
+        select(Application, Project)
+        .join(Project, Project.id == Application.project_id)
+        .where(
+            Application.applicant_id == user.id,
+            Application.initiated_by == applications.OWNER,
+            Application.status == applications.PENDING,
+        )
+        .order_by(Application.created_at.desc())
+    ).all()
+    for app_row, project in invite_rows:
+        owner = db.get(User, project.owner_id)
+        items.append(
+            NotificationOut(
+                kind="INVITE",
+                id=app_row.id,
+                title=f"Invited to “{project.title}”",
+                detail=(
+                    f"{owner.username if owner else 'Someone'} invited you to join."
+                ),
+                link=f"/projects/{project.id}",
+                created_at=app_row.created_at,
+            )
+        )
+
+    # Pending tips awaiting the payer's confirmation.
+    tip_rows = db.scalars(
+        select(Transaction).where(
+            Transaction.payee_id == user.id,
+            Transaction.kind == "TIP",
+            Transaction.status == "PENDING",
+        )
+    ).all()
+    for tx in tip_rows:
+        payer = db.get(User, tx.payer_id)
+        items.append(
+            NotificationOut(
+                kind="TIP",
+                id=tx.id,
+                title=f"Tip pending: {tx.currency} {float(tx.amount):.2f}",
+                detail=(
+                    f"{payer.username if payer else 'Someone'} wants to tip you."
+                ),
+                link=f"/u/{user.username}",
+                created_at=tx.created_at,
+            )
+        )
+
+    items.sort(key=lambda n: n.created_at, reverse=True)
+    return NotificationsOut(count=len(items), items=items)
 
 
 def _stats(db: Session, user: User) -> StatsOut:

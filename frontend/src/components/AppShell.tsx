@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { SignOut } from "@phosphor-icons/react";
 
+import { Notifications } from "./Notifications";
 import { useAuth } from "../lib/auth";
 
 /**
@@ -74,6 +75,7 @@ export function AppShell() {
           <div className="flex items-center gap-2">
             {user ? (
               <>
+                <Notifications />
                 <NavLink to="/projects/new" className="btn btn-primary h-9">
                   New project
                 </NavLink>

@@ -45,6 +45,7 @@
   --color-active: #0e8f6e;
   --color-closed: #3f4650;
   --color-deny: #c2410c;
+  --color-alert: #dc2626; /* notification dot: red, only used for unread */
 
   /* --- Type ------------------------------------------------------------ */
   /* Two families, clearly distinct roles. Inter for the tool; Newsreader —

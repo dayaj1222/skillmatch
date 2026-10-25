@@ -19,6 +19,7 @@ import type {
   SchemaOverview,
   Skill,
   SkillCategory,
+  Notifications,
   Tip,
   TipSummary,
   Transaction,
@@ -269,6 +270,7 @@ export const api = {
       body: JSON.stringify({ upi_txn_id }),
     }),
   receivedTips: () => request<TipSummary>("/api/tips/received"),
+  notifications: () => request<Notifications>("/api/notifications"),
   sentTips: () => request<Transaction[]>("/api/tips/sent"),
 
   // ---- ratings ----

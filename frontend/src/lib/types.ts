@@ -227,4 +227,20 @@ export interface TipSummary {
   tips: Transaction[];
 }
 
+// ---- notifications ----
+
+export interface Notification {
+  kind: "INVITE" | "TIP";
+  id: number;
+  title: string;
+  detail: string | null;
+  link: string;
+  created_at: string;
+}
+
+export interface Notifications {
+  count: number;
+  items: Notification[];
+}
+
 export type OAuthProvider = "github" | "google";

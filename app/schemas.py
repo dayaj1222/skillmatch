@@ -301,6 +301,23 @@ class MyApplicationOut(BaseModel):
     created_at: dt.datetime
 
 
+# ---------- notifications ----------
+
+
+class NotificationOut(BaseModel):
+    kind: str  # INVITE | TIP
+    id: int
+    title: str
+    detail: str | None = None
+    link: str
+    created_at: dt.datetime
+
+
+class NotificationsOut(BaseModel):
+    count: int = 0
+    items: list[NotificationOut] = Field(default_factory=list)
+
+
 class StatsOut(BaseModel):
     projects_led: int
     teams_joined: int
