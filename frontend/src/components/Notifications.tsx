@@ -27,6 +27,14 @@ export function Notifications() {
     }
   };
 
+  const dismiss = (n: Notification) => {
+    setItems((prev) => prev.filter((x) => !(x.kind === n.kind && x.id === n.id)));
+    void api.dismissNotification(n.kind, n.id).catch(() => {
+      // If it fails, re-sync on next poll.
+      void load();
+    });
+  };
+
   useEffect(() => {
     void load();
     const id = window.setInterval(() => void load(), 30_000);
@@ -82,7 +90,10 @@ export function Notifications() {
                 <li key={`${n.kind}-${n.id}`} className="border-b border-rule last:border-0">
                   <Link
                     to={n.link}
-                    onClick={() => setOpen(false)}
+                    onClick={() => {
+                      setOpen(false);
+                      dismiss(n);
+                    }}
                     className="block px-4 py-3 transition-colors hover:bg-surface"
                   >
                     <p className="text-[0.875rem] font-medium text-ink">{n.title}</p>

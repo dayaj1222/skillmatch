@@ -318,6 +318,11 @@ class NotificationsOut(BaseModel):
     items: list[NotificationOut] = Field(default_factory=list)
 
 
+class NotificationDismissIn(BaseModel):
+    kind: str = Field(min_length=1, max_length=16)
+    id: int
+
+
 class StatsOut(BaseModel):
     projects_led: int
     teams_joined: int

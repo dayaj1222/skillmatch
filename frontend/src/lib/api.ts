@@ -271,6 +271,11 @@ export const api = {
     }),
   receivedTips: () => request<TipSummary>("/api/tips/received"),
   notifications: () => request<Notifications>("/api/notifications"),
+  dismissNotification: (kind: string, id: number) =>
+    request<void>("/api/notifications/dismiss", {
+      method: "POST",
+      body: JSON.stringify({ kind, id }),
+    }),
   sentTips: () => request<Transaction[]>("/api/tips/sent"),
 
   // ---- ratings ----

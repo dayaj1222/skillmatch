@@ -21,6 +21,7 @@ from ..models import (
     Application,
     Endorsement,
     Membership,
+    NotificationDismissal,
     Profile,
     Project,
     Task,
@@ -35,6 +36,7 @@ from ..schemas import (
     InviteIn,
     MyApplicationOut,
     MyProjectOut,
+    NotificationDismissIn,
     NotificationOut,
     NotificationsOut,
     StatsOut,
@@ -169,6 +171,16 @@ def notifications(
     Items clear themselves once resolved: an invite disappears when it is
     accepted or declined, and a tip disappears once the payer confirms it.
     """
+    # Dismissed items are filtered out so a click permanently clears them.
+    dismissed = {
+        (d.kind, d.entity_id)
+        for d in db.scalars(
+            select(NotificationDismissal).where(
+                NotificationDismissal.user_id == user.id
+            )
+        ).all()
+    }
+
     items: list[NotificationOut] = []
 
     # Pending invites (owner-initiated applications awaiting this user's answer).
@@ -183,6 +195,8 @@ def notifications(
         .order_by(Application.created_at.desc())
     ).all()
     for app_row, project in invite_rows:
+        if ("INVITE", app_row.id) in dismissed:
+            continue
         owner = db.get(User, project.owner_id)
         items.append(
             NotificationOut(
@@ -206,6 +220,8 @@ def notifications(
         )
     ).all()
     for tx in tip_rows:
+        if ("TIP", tx.id) in dismissed:
+            continue
         payer = db.get(User, tx.payer_id)
         items.append(
             NotificationOut(
@@ -222,6 +238,29 @@ def notifications(
 
     items.sort(key=lambda n: n.created_at, reverse=True)
     return NotificationsOut(count=len(items), items=items)
+
+
+@router.post("/notifications/dismiss", status_code=204)
+def dismiss_notification(
+    payload: NotificationDismissIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    """Mark a notification as read so it stops showing the red dot."""
+    existing = db.scalar(
+        select(NotificationDismissal).where(
+            NotificationDismissal.user_id == user.id,
+            NotificationDismissal.kind == payload.kind,
+            NotificationDismissal.entity_id == payload.id,
+        )
+    )
+    if existing is None:
+        db.add(
+            NotificationDismissal(
+                user_id=user.id, kind=payload.kind, entity_id=payload.id
+            )
+        )
+        db.commit()
 
 
 def _stats(db: Session, user: User) -> StatsOut:
